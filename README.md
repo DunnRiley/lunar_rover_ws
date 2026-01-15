@@ -31,3 +31,15 @@ Currently having issues with the D435 camera in the ros launch.
 When runnig test_camera_transforms.sh I can get point cloud but I cannot get the point cloud with the other launch from rover_launcher.py, I can get the image but thats it. 
 
 Currently the teleop has the correct driving abilities but is missing the actuators. It includes a motor for spinning the camera but this motor dose not physicly exist yet.
+
+colcon build
+
+ros2 run lunar_robot_hardware motor_controller_node
+
+ros2 launch realsense2_camera rs_launch.py
+
+ros2 run tf2_ros tf2_echo base_link camera_depth_optical_frame
+
+ros2 run lunar_robot_autonomous unified_navigator
+
+python3 teleop_keyboard.py

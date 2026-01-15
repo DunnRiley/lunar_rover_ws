@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Real Rover Hardware Launch System
-Updated with proper transform support for RViz
+Real Rover Hardware Launch System - FIXED VERSION
+- Proper camera transforms for D435 point cloud
+- Support for new IFWATER stereo camera
+- Simplified for real hardware only
 """
 
 import os
@@ -10,7 +12,7 @@ import sys
 import subprocess
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QLabel,
-    QHBoxLayout, QGroupBox, QComboBox, QLineEdit
+    QHBoxLayout, QGroupBox, QLineEdit
 )
 from PyQt5.QtGui import QFont, QColor, QPainter
 from PyQt5.QtCore import Qt, QTimer
@@ -62,6 +64,8 @@ class RealRoverLauncher(QWidget):
             'front_left': '/dev/ttyUSB1',
             'back_right': '/dev/ttyUSB2',
             'back_left': '/dev/ttyUSB3',
+            'actuator_1': '/dev/ttyUSB4',
+            'actuator_2': '/dev/ttyUSB5',
             'camera_rotation': '/dev/ttyUSB7'
         }
 
@@ -124,13 +128,15 @@ class RealRoverLauncher(QWidget):
         components_group = QGroupBox("Individual Component Control")
         components_layout = QVBoxLayout()
 
-        # Robot State Publisher (creates base_link)
+        # Robot State Publisher with camera transforms (COMBINED)
         components_layout.addWidget(self.create_control_block(
-            "robot_state",
-            "Robot State Publisher (Creates base_link & Transforms)",
+            "transforms",
+            "TF Transforms (base_link + camera frames)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
+
+# Start robot state publisher
 ros2 run robot_state_publisher robot_state_publisher \\
     --ros-args \\
     -p robot_description:="<?xml version='1.0'?>
@@ -149,26 +155,27 @@ ros2 run robot_state_publisher robot_state_publisher \\
     <origin xyz='-0.15 0 0.2' rpy='0 0 3.14159265359'/>
   </joint>
 </robot>" \\
-    -p use_sim_time:=false
-"""
-        ))
+    -p use_sim_time:=false &
 
-        # Camera optical frame transforms
-        components_layout.addWidget(self.create_control_block(
-            "camera_transforms",
-            "Camera Optical Frame Transforms",
-            """
+RSP_PID=$!
+
+# Wait for robot_state_publisher to start
+sleep 1
+
+# Camera optical frame transforms (CRITICAL for point cloud)
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_depth_optical_frame &
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_color_optical_frame &
-ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_color_optical_frame &
-wait
+ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_depth_optical_frame &
+
+# Wait for all processes
+wait $RSP_PID
 """
         ))
 
         # Motor controller
         components_layout.addWidget(self.create_control_block(
             "motor_controller",
-            "Motor Controller (4-Wheel Drive)",
+            "Motor Controller (4-Wheel Drive + 2 Actuators)",
             f"""
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -182,7 +189,7 @@ ros2 run lunar_robot_hardware motor_controller_node \\
 """
         ))
 
-        # Front camera
+        # Front camera (D435)
         components_layout.addWidget(self.create_control_block(
             "front_camera",
             "Front Camera (D435 - RGB + Depth + Point Cloud)",
@@ -195,29 +202,36 @@ ros2 launch realsense2_camera rs_launch.py \\
     enable_depth:=true \\
     enable_color:=true \\
     pointcloud.enable:=true \\
-    align_depth.enable:=true
+    align_depth.enable:=true \\
+    depth_module.profile:=640x480x30 \\
+    rgb_camera.profile:=640x480x30
 """
         ))
 
-        # Rear camera
+        # Rear camera (IFWATER Stereo)
         components_layout.addWidget(self.create_control_block(
             "rear_camera",
-            "Rear Camera (T265 - RGB Only)",
+            "Rear Camera (IFWATER Stereo - Depth + RGB)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
-ros2 launch realsense2_camera rs_launch.py \\
-    camera_name:=camera_rear \\
-    camera_namespace:=camera_rear \\
-    enable_color:=true \\
-    enable_depth:=false
+# IFWATER camera launch - adjust device path as needed
+ros2 run usb_cam usb_cam_node_exe \\
+    --ros-args \\
+    -p video_device:=/dev/video2 \\
+    -r __ns:=/camera_rear \\
+    -r __node:=camera_rear \\
+    -p image_width:=1280 \\
+    -p image_height:=720 \\
+    -p framerate:=30.0 \\
+    -p camera_frame_id:=camera_rear_color_optical_frame
 """
         ))
 
-        # Navigation
+        # Navigation (optional)
         components_layout.addWidget(self.create_control_block(
             "navigation",
-            "Unified Navigator (Point-Click + Obstacle Avoidance)",
+            "Autonomous Navigator (Point-Click + Obstacles)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -233,19 +247,18 @@ ros2 run lunar_robot_autonomous unified_navigator \\
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
-ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/src/lunar_robot_description/config/real_hardware_navigation.rviz \\
+ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz \\
     --ros-args -p use_sim_time:=false
 """
         ))
 
-        # Teleop
+        # Teleop with actuators
         components_layout.addWidget(self.create_control_block(
             "teleop",
-            "Keyboard Teleop (Simple - Drive + Camera)",
+            "Keyboard Teleop (Drive + Camera + Actuators)",
             """
 cd ~/lunar_rover_ws
-source install/setup.bash
-python3 simple_teleop_keyboard.py
+python3 teleop_keyboard.py
 """
         ))
 
@@ -260,34 +273,69 @@ python3 simple_teleop_keyboard.py
         self.timer.start(500)
 
     def launch_complete_system(self):
-        """Launch the complete rover system using launch file"""
-        self.status_lights["complete_system"] = StatusLight("yellow")
-        proc = run_in_terminal(
-            """
-cd ~/lunar_rover_ws
-source install/setup.bash
-ros2 launch lunar_robot_hardware real_rover.launch.py
-"""
-        )
-        self.processes["complete_system"] = proc
+        """Launch the complete rover system"""
+        # Start transforms first
+        self.start_process("transforms", self.get_transforms_command())
+        
+        # Wait a bit for transforms
+        QTimer.singleShot(2000, lambda: self.start_process("motor_controller", self.get_motor_command()))
+        QTimer.singleShot(3000, lambda: self.start_process("front_camera", self.get_front_camera_command()))
+        QTimer.singleShot(4000, lambda: self.start_process("rear_camera", self.get_rear_camera_command()))
+        QTimer.singleShot(5000, lambda: self.start_process("rviz", self.get_rviz_command()))
 
     def launch_camera_test(self):
         """Launch camera test mode"""
-        self.status_lights["camera_test"] = StatusLight("yellow")
-        proc = run_in_terminal(
-            """
+        self.start_process("transforms", self.get_transforms_command())
+        QTimer.singleShot(2000, lambda: self.start_process("front_camera", self.get_front_camera_command()))
+        QTimer.singleShot(3000, lambda: self.start_process("rviz", self.get_rviz_command()))
+
+    def get_transforms_command(self):
+        """Get the transforms command"""
+        return """
 cd ~/lunar_rover_ws
 source install/setup.bash
-ros2 launch lunar_robot_hardware camera_test.launch.py
+ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="<?xml version='1.0'?><robot name='lunar_rover'><link name='base_link'><visual><geometry><box size='0.5 0.3 0.2'/></geometry></visual></link><link name='camera_link'/><joint name='base_to_camera' type='fixed'><parent link='base_link'/><child link='camera_link'/><origin xyz='0.15 0 0.2' rpy='0 0 0'/></joint><link name='camera_rear_link'/><joint name='base_to_camera_rear' type='fixed'><parent link='base_link'/><child link='camera_rear_link'/><origin xyz='-0.15 0 0.2' rpy='0 0 3.14159265359'/></joint></robot>" -p use_sim_time:=false &
+sleep 1
+ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_depth_optical_frame &
+ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_color_optical_frame &
+ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_depth_optical_frame &
+wait
 """
-        )
-        self.processes["camera_test"] = proc
+
+    def get_motor_command(self):
+        return f"""
+cd ~/lunar_rover_ws
+source install/setup.bash
+ros2 run lunar_robot_hardware motor_controller_node --ros-args -p fr_port:={self.motor_ports['front_right']} -p fl_port:={self.motor_ports['front_left']} -p br_port:={self.motor_ports['back_right']} -p bl_port:={self.motor_ports['back_left']} -p use_sim_time:=false
+"""
+
+    def get_front_camera_command(self):
+        return """
+cd ~/lunar_rover_ws
+source install/setup.bash
+ros2 launch realsense2_camera rs_launch.py camera_name:=camera camera_namespace:=camera enable_depth:=true enable_color:=true pointcloud.enable:=true align_depth.enable:=true
+"""
+
+    def get_rear_camera_command(self):
+        return """
+cd ~/lunar_rover_ws
+source install/setup.bash
+ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video2 -r __ns:=/camera_rear -r __node:=camera_rear -p image_width:=1280 -p image_height:=720 -p framerate:=30.0 -p camera_frame_id:=camera_rear_depth_optical_frame
+"""
+
+    def get_rviz_command(self):
+        return """
+cd ~/lunar_rover_ws
+source install/setup.bash
+ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p use_sim_time:=false
+"""
 
     def _format_port_config(self):
         """Format port configuration for display"""
-        return f"FR: {self.motor_ports['front_right']} | FL: {self.motor_ports['front_left']} | " \
-               f"BR: {self.motor_ports['back_right']} | BL: {self.motor_ports['back_left']} | " \
-               f"CAM: {self.motor_ports['camera_rotation']}"
+        return (f"FR: {self.motor_ports['front_right']} | FL: {self.motor_ports['front_left']} | "
+                f"BR: {self.motor_ports['back_right']} | BL: {self.motor_ports['back_left']} | "
+                f"ACT1: {self.motor_ports['actuator_1']} | ACT2: {self.motor_ports['actuator_2']} | "
+                f"CAM: {self.motor_ports['camera_rotation']}")
 
     def configure_ports(self):
         """Open port configuration dialog"""

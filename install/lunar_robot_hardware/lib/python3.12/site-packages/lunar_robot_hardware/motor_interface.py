@@ -2,9 +2,7 @@
 """
 Motor Interface - Hardware Abstraction Layer
 OOP design for real rover motor control via USB serial
-
-Mirrors the simulation Motor/Chassis classes but controls real hardware.
-Designed to be easily upgraded when variable speed control is added.
+4 drive motors + 2 actuators motors
 """
 
 import serial
@@ -26,7 +24,7 @@ class MotorDirection(Enum):
 class MotorConfig:
     """Configuration for a single motor"""
     port: str
-    position: str  # 'front_right', 'front_left', etc.
+    position: str  # 'front_right', 'front_left', 'aux_1', etc.
     baudrate: int = 9600
     timeout: float = 1.0
     max_reconnect_attempts: int = 3
@@ -40,16 +38,13 @@ class Motor:
     - RTS LOW + DTR HIGH = Forward
     - RTS HIGH + DTR LOW = Backward  
     - RTS HIGH + DTR HIGH = Stop
-    
-    Future upgrade path: Replace set_direction() internals when
-    PWM or CAN control is added, keeping the same external API.
     """
     
     def __init__(self, config: MotorConfig):
         self.config = config
         self.serial: Optional[serial.Serial] = None
         self._direction = MotorDirection.STOP
-        self._speed = 0.0  # Reserved for future variable speed
+        self._speed = 0.0
         self._lock = threading.Lock()
         self._is_connected = False
         
@@ -117,26 +112,6 @@ class Motor:
         else:
             self.stop()
     
-    def set_speed(self, speed: float):
-        """
-        Set motor speed (reserved for future PWM/CAN control)
-        
-        Args:
-            speed: -1.0 (full backward) to 1.0 (full forward)
-        
-        Current behavior: Binary on/off
-        Future: Will map to PWM duty cycle or CAN velocity command
-        """
-        self._speed = max(-1.0, min(1.0, speed))
-        
-        # Current implementation: binary control
-        if speed > 0.05:
-            self.forward()
-        elif speed < -0.05:
-            self.backward()
-        else:
-            self.stop()
-    
     @property
     def is_connected(self) -> bool:
         return self._is_connected
@@ -153,10 +128,58 @@ class Motor:
         self.disconnect()
 
 
+class ActuatorsMotorPair:
+    """
+    Pair of actuators motors that move together
+    """
+    
+    def __init__(self, motor1: Motor, motor2: Motor, name: str = "actuators"):
+        """
+        Initialize actuators motor pair
+        
+        Args:
+            motor1: First motor
+            motor2: Second motor
+            name: Descriptive name for the motor pair
+        """
+        self.motor1 = motor1
+        self.motor2 = motor2
+        self.name = name
+        
+    def connect(self) -> bool:
+        """Connect both motors"""
+        m1_ok = self.motor1.connect()
+        m2_ok = self.motor2.connect()
+        return m1_ok and m2_ok
+    
+    def disconnect(self):
+        """Disconnect both motors"""
+        self.motor1.disconnect()
+        self.motor2.disconnect()
+    
+    def forward(self):
+        """Move both motors forward"""
+        self.motor1.forward()
+        self.motor2.forward()
+    
+    def backward(self):
+        """Move both motors backward"""
+        self.motor1.backward()
+        self.motor2.backward()
+    
+    def stop(self):
+        """Stop both motors"""
+        self.motor1.stop()
+        self.motor2.stop()
+    
+    @property
+    def is_connected(self) -> bool:
+        return self.motor1.is_connected and self.motor2.is_connected
+
+
 class SkidSteerChassis:
     """
     4-wheel skid-steer chassis controller
-    Mirrors the simulation Chassis class but controls real hardware
     """
     
     def __init__(self, motor_configs: Dict[str, MotorConfig]):
@@ -171,7 +194,7 @@ class SkidSteerChassis:
             pos: Motor(config) for pos, config in motor_configs.items()
         }
         self._emergency_stop = False
-        self._watchdog_timeout = 0.5  # seconds
+        self._watchdog_timeout = 0.5
         self._last_command_time = time.time()
         
     def connect_all(self) -> bool:
@@ -183,9 +206,9 @@ class SkidSteerChassis:
                 success = False
         
         if success:
-            print("✓ Chassis fully connected!")
+            print("Chassis fully connected!")
         else:
-            print("✗ Some motors failed to connect")
+            print("Some motors failed to connect")
         
         return success
     
@@ -200,23 +223,16 @@ class SkidSteerChassis:
         self._emergency_stop = True
         for motor in self.motors.values():
             motor.stop()
-        print("🛑 EMERGENCY STOP ACTIVATED")
+        print("EMERGENCY STOP ACTIVATED")
     
     def clear_emergency_stop(self):
         """Clear emergency stop state"""
         self._emergency_stop = False
         print("✓ Emergency stop cleared")
     
-    def check_watchdog(self):
-        """Check if commands are still being received"""
-        if time.time() - self._last_command_time > self._watchdog_timeout:
-            self.stop()
-    
     def _update_command_time(self):
         """Update last command timestamp"""
         self._last_command_time = time.time()
-    
-    # ==================== MOVEMENT COMMANDS ====================
     
     def stop(self):
         """Stop all motors"""
@@ -259,38 +275,10 @@ class SkidSteerChassis:
         self.motors['front_right'].backward()
         self.motors['back_right'].backward()
     
-    def gentle_turn_left(self):
-        """Gentle left - right motors on, left stopped"""
-        if self._emergency_stop:
-            return
-        self._update_command_time()
-        self.motors['front_left'].stop()
-        self.motors['back_left'].stop()
-        self.motors['front_right'].forward()
-        self.motors['back_right'].forward()
-    
-    def gentle_turn_right(self):
-        """Gentle right - left motors on, right stopped"""
-        if self._emergency_stop:
-            return
-        self._update_command_time()
-        self.motors['front_left'].forward()
-        self.motors['back_left'].forward()
-        self.motors['front_right'].stop()
-        self.motors['back_right'].stop()
-    
     def process_cmd_vel(self, linear: float, angular: float, 
                        deadzone_linear: float = 0.05,
                        deadzone_angular: float = 0.05):
-        """
-        Process cmd_vel-style commands (matches simulation interface)
-        
-        Args:
-            linear: Linear velocity (-1.0 to 1.0)
-            angular: Angular velocity (-1.0 to 1.0)
-            deadzone_linear: Minimum linear value to trigger motion
-            deadzone_angular: Minimum angular value to trigger motion
-        """
+        """Process cmd_vel-style commands"""
         if self._emergency_stop:
             return
         
@@ -307,7 +295,7 @@ class SkidSteerChassis:
             self.stop()
             return
         
-        # Pure rotation (pivot turn)
+        # Pure rotation
         if abs(linear) < 0.01:
             if angular > 0:
                 self.turn_left()
@@ -323,14 +311,19 @@ class SkidSteerChassis:
                 self.backward()
             return
         
-        # Combined motion (forward/backward + turn)
+        # Combined motion
         if linear > 0:
             if angular > 0:
-                self.gentle_turn_left()
+                self.motors['front_left'].stop()
+                self.motors['back_left'].stop()
+                self.motors['front_right'].forward()
+                self.motors['back_right'].forward()
             else:
-                self.gentle_turn_right()
+                self.motors['front_left'].forward()
+                self.motors['back_left'].forward()
+                self.motors['front_right'].stop()
+                self.motors['back_right'].stop()
         else:
-            # Backward with turn (simplified)
             if angular > 0:
                 self.motors['front_left'].stop()
                 self.motors['back_left'].stop()
@@ -355,72 +348,133 @@ class SkidSteerChassis:
         self.disconnect_all()
 
 
-# ==================== FACTORY FUNCTION ====================
+class CompleteRover:
+    """
+    Complete rover system with drive chassis + actuators motors
+    """
+    
+    def __init__(self, chassis: SkidSteerChassis, aux_motors: ActuatorsMotorPair):
+        """
+        Initialize complete rover
+        
+        Args:
+            chassis: SkidSteerChassis for driving
+            aux_motors: ActuatorsMotorPair for actuators functions
+        """
+        self.chassis = chassis
+        self.aux_motors = aux_motors
+        
+    def connect_all(self) -> bool:
+        """Connect to all motors"""
+        chassis_ok = self.chassis.connect_all()
+        aux_ok = self.aux_motors.connect()
+        return chassis_ok and aux_ok
+    
+    def disconnect_all(self):
+        """Disconnect all motors"""
+        self.chassis.disconnect_all()
+        self.aux_motors.disconnect()
+    
+    def emergency_stop(self):
+        """Emergency stop everything"""
+        self.chassis.emergency_stop()
+        self.aux_motors.stop()
+    
+    @property
+    def is_fully_connected(self) -> bool:
+        return self.chassis.is_fully_connected and self.aux_motors.is_connected
+
+
+#  FACTORY FUNCTIONS 
 
 def create_chassis_from_ports(fr_port: str, fl_port: str, 
                               br_port: str, bl_port: str,
                               baudrate: int = 9600) -> SkidSteerChassis:
-    """
-    Factory function to create chassis from port strings
-    
-    Args:
-        fr_port: Front right motor port (e.g., '/dev/ttyUSB0')
-        fl_port: Front left motor port
-        br_port: Back right motor port
-        bl_port: Back left motor port
-        baudrate: Serial communication baud rate
-    
-    Returns:
-        Configured SkidSteerChassis instance
-    """
+    """Create chassis from port strings"""
     motor_configs = {
         'front_right': MotorConfig(fr_port, 'front_right', baudrate),
         'front_left': MotorConfig(fl_port, 'front_left', baudrate),
         'back_right': MotorConfig(br_port, 'back_right', baudrate),
         'back_left': MotorConfig(bl_port, 'back_left', baudrate),
     }
-    
     return SkidSteerChassis(motor_configs)
 
 
+def create_aux_motors_from_ports(port1: str, port2: str,
+                                 baudrate: int = 9600,
+                                 name: str = "actuators") -> ActuatorsMotorPair:
+    """Create actuators motor pair from port strings"""
+    motor1 = Motor(MotorConfig(port1, f'{name}_1', baudrate))
+    motor2 = Motor(MotorConfig(port2, f'{name}_2', baudrate))
+    return ActuatorsMotorPair(motor1, motor2, name)
+
+
+def create_complete_rover(fr_port: str, fl_port: str, br_port: str, bl_port: str,
+                         aux1_port: str, aux2_port: str,
+                         baudrate: int = 9600) -> CompleteRover:
+    """
+    Create complete rover with all 6 motors
+    
+    Args:
+        fr_port: Front right drive motor
+        fl_port: Front left drive motor
+        br_port: Back right drive motor
+        bl_port: Back left drive motor
+        aux1_port: actuators motor 1
+        aux2_port: actuators motor 2
+        baudrate: Serial communication rate
+    """
+    chassis = create_chassis_from_ports(fr_port, fl_port, br_port, bl_port, baudrate)
+    aux_motors = create_aux_motors_from_ports(aux1_port, aux2_port, baudrate, "Collection")
+    return CompleteRover(chassis, aux_motors)
+
+
 if __name__ == '__main__':
-    # Test the motor interface
+    # Test the complete rover interface
     print("="*60)
-    print("MOTOR INTERFACE TEST")
+    print("COMPLETE ROVER TEST (6 MOTORS)")
     print("="*60)
     
-    chassis = create_chassis_from_ports(
+    rover = create_complete_rover(
         '/dev/ttyUSB0',  # FR
         '/dev/ttyUSB1',  # FL
         '/dev/ttyUSB2',  # BR
-        '/dev/ttyUSB3'   # BL
+        '/dev/ttyUSB3',  # BL
+        '/dev/ttyUSB4',  # AUX1
+        '/dev/ttyUSB5'   # AUX2
     )
     
     try:
-        with chassis:
-            if chassis.is_fully_connected:
-                print("\n✓ All motors connected! Running test sequence...\n")
-                
-                print("Test 1: Forward for 2 seconds")
-                chassis.forward()
-                time.sleep(2)
-                
-                print("Test 2: Stop")
-                chassis.stop()
-                time.sleep(1)
-                
-                print("Test 3: Turn left for 2 seconds")
-                chassis.turn_left()
-                time.sleep(2)
-                
-                print("Test 4: Stop")
-                chassis.stop()
-                time.sleep(1)
-                
-                print("\n✓ Test complete!")
-            else:
-                print("\n✗ Not all motors connected - test aborted")
+        if rover.connect_all():
+            print("\n✓ All motors connected! Running test sequence...\n")
+            
+            print("Test 1: Drive forward for 2 seconds")
+            rover.chassis.forward()
+            time.sleep(2)
+            
+            print("Test 2: Stop drive")
+            rover.chassis.stop()
+            time.sleep(1)
+            
+            print("Test 3: actuators motors up for 2 seconds")
+            rover.aux_motors.forward()
+            time.sleep(2)
+            
+            print("Test 4: actuators motors down for 2 seconds")
+            rover.aux_motors.backward()
+            time.sleep(2)
+            
+            print("Test 5: Stop actuators")
+            rover.aux_motors.stop()
+            time.sleep(1)
+            
+            print("\n✓ Test complete!")
+        else:
+            print("\n✗ Not all motors connected - test aborted")
     
     except KeyboardInterrupt:
         print("\n\nTest interrupted by user")
-        chassis.emergency_stop()
+        rover.emergency_stop()
+    
+    finally:
+        rover.disconnect_all()

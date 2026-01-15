@@ -1,0 +1,2 @@
+[console_scripts]
+unified_navigator = lunar_robot_autonomous.unified_navigator:main

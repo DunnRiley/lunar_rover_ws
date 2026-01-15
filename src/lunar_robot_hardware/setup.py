@@ -10,10 +10,10 @@ setup(
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name]),
+            ['resource/' + package_name + '.txt']),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml') if os.path.exists('config') else []),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,8 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'motor_controller = lunar_robot_hardware.motor_controller:main',
-            'hardware_test = lunar_robot_hardware.motor_interface:main',
+            'motor_controller_node = lunar_robot_hardware.motor_controller:main',
         ],
     },
 )

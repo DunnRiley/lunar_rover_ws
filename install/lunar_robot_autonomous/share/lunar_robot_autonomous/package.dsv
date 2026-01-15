@@ -1,0 +1,6 @@
+source;share/lunar_robot_autonomous/hook/pythonpath.ps1
+source;share/lunar_robot_autonomous/hook/pythonpath.dsv
+source;share/lunar_robot_autonomous/hook/pythonpath.sh
+source;share/lunar_robot_autonomous/hook/ament_prefix_path.ps1
+source;share/lunar_robot_autonomous/hook/ament_prefix_path.dsv
+source;share/lunar_robot_autonomous/hook/ament_prefix_path.sh
