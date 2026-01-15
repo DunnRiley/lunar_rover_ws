@@ -26,7 +26,7 @@ class RealHardwareMotorController(Node):
     def __init__(self):
         super().__init__('real_hardware_motor_controller')
         
-        # ==================== PARAMETERS ====================
+        #  PARAMETERS 
         self.declare_parameter('fr_port', '/dev/ttyUSB0')
         self.declare_parameter('fl_port', '/dev/ttyUSB1')
         self.declare_parameter('br_port', '/dev/ttyUSB2')
@@ -48,7 +48,7 @@ class RealHardwareMotorController(Node):
         self.deadzone_angular = self.get_parameter('deadzone_angular').value
         watchdog_rate = self.get_parameter('watchdog_rate').value
         
-        # ==================== HARDWARE INTERFACE ====================
+        #  HARDWARE INTERFACE 
         self.get_logger().info('Initializing hardware interface...')
         self.chassis = create_chassis_from_ports(
             fr_port, fl_port, br_port, bl_port, baudrate
@@ -56,17 +56,17 @@ class RealHardwareMotorController(Node):
         
         # Connect to motors
         if not self.chassis.connect_all():
-            self.get_logger().error('❌ Failed to connect to all motors!')
+            self.get_logger().error('Failed to connect to all motors!')
             self.get_logger().error('Check USB connections and port mappings')
             raise RuntimeError('Motor connection failed')
         
-        # ==================== STATE ====================
+        # STATE 
         self.last_cmd_vel_time = self.get_clock().now()
         self.current_linear = 0.0
         self.current_angular = 0.0
         self.is_emergency_stopped = False
         
-        # ==================== SUBSCRIBERS ====================
+        # SUBSCRIBERS 
         self.cmd_vel_sub = self.create_subscription(
             Twist,
             '/cmd_vel',
@@ -81,7 +81,7 @@ class RealHardwareMotorController(Node):
             10
         )
         
-        # ==================== PUBLISHERS ====================
+        # PUBLISHERS 
         # Publish motor status for monitoring
         self.status_pub = self.create_publisher(
             String,
@@ -96,7 +96,7 @@ class RealHardwareMotorController(Node):
             10
         )
         
-        # ==================== TIMERS ====================
+        # TIMERS 
         # Watchdog timer - stops motors if no cmd_vel received
         self.watchdog_timer = self.create_timer(
             1.0 / watchdog_rate,
@@ -115,7 +115,7 @@ class RealHardwareMotorController(Node):
             self.publish_joint_states
         )
         
-        self.get_logger().info('✅ Real Hardware Motor Controller Ready!')
+        self.get_logger().info('Real Hardware Motor Controller Ready!')
         self.get_logger().info('='*60)
         self.get_logger().info('Motor Ports:')
         self.get_logger().info(f'  Front Right: {fr_port}')
@@ -163,11 +163,11 @@ class RealHardwareMotorController(Node):
     def emergency_stop_callback(self, msg: Bool):
         """Handle emergency stop commands"""
         if msg.data and not self.is_emergency_stopped:
-            self.get_logger().error('🛑 EMERGENCY STOP ACTIVATED!')
+            self.get_logger().error('EMERGENCY STOP ACTIVATED!')
             self.chassis.emergency_stop()
             self.is_emergency_stopped = True
         elif not msg.data and self.is_emergency_stopped:
-            self.get_logger().info('✅ Emergency stop cleared')
+            self.get_logger().info('Emergency stop cleared')
             self.chassis.clear_emergency_stop()
             self.is_emergency_stopped = False
     
@@ -241,7 +241,7 @@ class RealHardwareMotorController(Node):
         self.get_logger().info('Shutting down motor controller...')
         self.chassis.stop()
         self.chassis.disconnect_all()
-        self.get_logger().info('✅ Motor controller shutdown complete')
+        self.get_logger().info('Motor controller shutdown complete')
     
     def destroy_node(self):
         """Override to ensure clean shutdown"""

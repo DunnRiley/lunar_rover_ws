@@ -1,6 +1,6 @@
 """
-Skid-Steer Rover Teleoperation System
-Object-oriented design for controlling a 4-wheel rover via USB serial ports
+Skid-Steer Rover Teleoperation System with actuators Motors
+Now includes: 4 drive motors (USB0-3) + 2 actuators motors (USB4-5)
 """
 
 import serial
@@ -16,6 +16,8 @@ class MotorPosition(Enum):
     FRONT_LEFT = "front_left"
     BACK_RIGHT = "back_right"
     BACK_LEFT = "back_left"
+    AUX_1 = "aux_1"
+    AUX_2 = "aux_2"
 
 
 class MotorDirection(Enum):
@@ -78,15 +80,15 @@ class Motor:
     def forward(self):
         """Move motor forward"""
         if self.serial:
-            self.serial.rts = False  # RTS LOW ON
-            self.serial.dtr = True   # DTR HIGH OFF
+            self.serial.rts = False  # RTS LOW  ON
+            self.serial.dtr = True   # DTR HIGH  OFF
             self._current_direction = MotorDirection.FORWARD
     
     def backward(self):
         """Move motor backward"""
         if self.serial:
-            self.serial.rts = True   # RTS HIGH OFF
-            self.serial.dtr = False  # DTR LOW ON
+            self.serial.rts = True   # RTS HIGH  OFF
+            self.serial.dtr = False  # DTR LOW  ON
             self._current_direction = MotorDirection.BACKWARD
     
     def set_direction(self, direction: MotorDirection):
@@ -113,72 +115,133 @@ class Motor:
         self.disconnect()
 
 
-class SkidSteerRover:
+class ActuatorsMotors:
     """
-    Skid-steer rover with 4 motors (front-right, front-left, back-right, back-left)
+    Pair of actuators motors that move together
     """
     
-    def __init__(self, fr_port: str, fl_port: str, br_port: str, bl_port: str, baudrate: int = 9600):
+    def __init__(self, motor1: Motor, motor2: Motor):
         """
-        Initialize rover with four motors
+        Initialize actuators motor pair
+        
+        Args:
+            motor1: First actuators motor
+            motor2: Second actuators motor
+        """
+        self.motor1 = motor1
+        self.motor2 = motor2
+        
+    def connect(self):
+        """Connect both motors"""
+        self.motor1.connect()
+        self.motor2.connect()
+    
+    def disconnect(self):
+        """Disconnect both motors"""
+        self.motor1.disconnect()
+        self.motor2.disconnect()
+    
+    def stop(self):
+        """Stop both motors"""
+        self.motor1.stop()
+        self.motor2.stop()
+    
+    def forward(self):
+        """Move both motors forward"""
+        self.motor1.forward()
+        self.motor2.forward()
+    
+    def backward(self):
+        """Move both motors backward"""
+        self.motor1.backward()
+        self.motor2.backward()
+
+
+class SkidSteerRover:
+    """
+    Complete rover with 4 drive motors + 2 actuators motors
+    """
+    
+    def __init__(self, fr_port: str, fl_port: str, br_port: str, bl_port: str, 
+                 aux1_port: str, aux2_port: str, baudrate: int = 9600):
+        """
+        Initialize rover with six motors total
         
         Args:
             fr_port: Serial port for front-right motor (USB0)
             fl_port: Serial port for front-left motor (USB1)
             br_port: Serial port for back-right motor (USB2)
             bl_port: Serial port for back-left motor (USB3)
+            aux1_port: Serial port for actuators motor 1 (USB4)
+            aux2_port: Serial port for actuators motor 2 (USB5)
             baudrate: Communication baud rate
         """
+        # Drive motors
         self.fr_motor = Motor(fr_port, MotorPosition.FRONT_RIGHT, baudrate)
         self.fl_motor = Motor(fl_port, MotorPosition.FRONT_LEFT, baudrate)
         self.br_motor = Motor(br_port, MotorPosition.BACK_RIGHT, baudrate)
         self.bl_motor = Motor(bl_port, MotorPosition.BACK_LEFT, baudrate)
+        
+        # actuators motors
+        aux1 = Motor(aux1_port, MotorPosition.AUX_1, baudrate)
+        aux2 = Motor(aux2_port, MotorPosition.AUX_2, baudrate)
+        self.aux_motors = ActuatorsMotors(aux1, aux2)
+        
         self._is_connected = False
     
     @property
-    def all_motors(self):
-        """Return list of all motors"""
+    def drive_motors(self):
+        """Return list of drive motors"""
         return [self.fr_motor, self.fl_motor, self.br_motor, self.bl_motor]
     
     @property
     def left_motors(self):
-        """Return left side motors"""
+        """Return left side drive motors"""
         return [self.fl_motor, self.bl_motor]
     
     @property
     def right_motors(self):
-        """Return right side motors"""
+        """Return right side drive motors"""
         return [self.fr_motor, self.br_motor]
     
     def connect(self):
         """Connect to all motors"""
         print("Connecting to rover motors...")
-        for motor in self.all_motors:
+        print("Drive motors:")
+        for motor in self.drive_motors:
             motor.connect()
+        print("\nactuators motors:")
+        self.aux_motors.connect()
         self._is_connected = True
-        print("Rover fully connected and ready!")
+        print("\nRover fully connected and ready!")
     
     def disconnect(self):
         """Disconnect all motors"""
         print("Disconnecting rover motors...")
-        for motor in self.all_motors:
+        for motor in self.drive_motors:
             motor.disconnect()
+        self.aux_motors.disconnect()
         self._is_connected = False
         print("Rover disconnected")
     
     def stop(self):
-        """Stop all motors"""
-        for motor in self.all_motors:
+        """Stop all drive motors"""
+        for motor in self.drive_motors:
             motor.stop()
     
+    def stop_all(self):
+        """Stop ALL motors including actuators"""
+        self.stop()
+        self.aux_motors.stop()
+    
     def forward(self):
-        """Move rover forward - all motors forward"""
-        for motor in self.all_motors:
+        """Move rover forward - all drive motors forward"""
+        for motor in self.drive_motors:
             motor.forward()
     
     def backward(self):
-        """Move rover backward - all motors backward"""
-        for motor in self.all_motors:
+        """Move rover backward - all drive motors backward"""
+        for motor in self.drive_motors:
             motor.backward()
     
     def turn_left(self):
@@ -209,19 +272,18 @@ class SkidSteerRover:
         for motor in self.right_motors:
             motor.stop()
     
-    def strafe_left(self):
-        """Strafe left - diagonal movement (if mechanically possible)"""
-        self.fl_motor.backward()
-        self.fr_motor.forward()
-        self.bl_motor.forward()
-        self.br_motor.backward()
+    # actuators motor controls
+    def aux_forward(self):
+        """Move actuators motors forward"""
+        self.aux_motors.forward()
     
-    def strafe_right(self):
-        """Strafe right - diagonal movement (if mechanically possible)"""
-        self.fl_motor.forward()
-        self.fr_motor.backward()
-        self.bl_motor.backward()
-        self.br_motor.forward()
+    def aux_backward(self):
+        """Move actuators motors backward"""
+        self.aux_motors.backward()
+    
+    def aux_stop(self):
+        """Stop actuators motors"""
+        self.aux_motors.stop()
     
     def __enter__(self):
         """Context manager entry"""
@@ -250,18 +312,26 @@ class KeyboardTeleop:
     
     def print_controls(self):
         """Print control instructions"""
-        print("\n" + "="*50)
-        print("ROVER TELEOP CONTROLS")
-        print("="*50)
-        print("W - Forward")
-        print("S - Backward")
-        print("A - Turn Left")
-        print("D - Turn Right")
-        print("Q - Pivot Left")
-        print("E - Pivot Right")
-        print("SPACE - Stop")
-        print("X - Exit")
-        print("="*50 + "\n")
+        print("\n" + "="*60)
+        print("ROVER TELEOP CONTROLS (6 MOTORS)")
+        print("="*60)
+        print("\nDRIVE CONTROLS:")
+        print("  W - Forward")
+        print("  S - Backward")
+        print("  A - Turn Left")
+        print("  D - Turn Right")
+        print("  Z - Pivot Left")
+        print("  C - Pivot Right")
+        print("\n Actuators MOTORS:")
+        print("  Q - Actuators Up")
+        print("  E - Actuators Down")
+        print("\n STOP:")
+        print("  SPACE - Stop Drive Motors")
+        print("  R - Stop Actuators Motors")
+        print("  X - STOP ALL MOTORS")
+        print("\n EXIT:")
+        print("  ESC or Ctrl+C - Exit program")
+        print("="*60 + "\n")
     
     def run(self):
         """Run the teleoperation loop"""
@@ -301,68 +371,90 @@ class KeyboardTeleop:
     
     def _handle_key(self, key: str):
         """Handle keyboard input"""
+        # Drive controls
         if key == 'w':
-            print("Forward")
+            print(" Forward")
             self.rover.forward()
         elif key == 's':
-            print("Backward")
+            print(" Backward")
             self.rover.backward()
         elif key == 'a':
-            print("Turn Left")
+            print(" Turn Left")
             self.rover.turn_left()
         elif key == 'd':
-            print("Turn Right")
+            print(" Turn Right")
             self.rover.turn_right()
-        elif key == 'q':
-            print("Pivot Left")
+        elif key == 'z':
+            print(" Pivot Left")
             self.rover.pivot_left()
-        elif key == 'e':
-            print("Pivot Right")
+        elif key == 'c':
+            print(" Pivot Right")
             self.rover.pivot_right()
+        
+        # actuators controls
+        elif key == 'q':
+            print("Actuators Up")
+            self.rover.aux_forward()
+        elif key == 'e':
+            print("Actuators Down")
+            self.rover.aux_backward()
+        
+        # Stop controls
         elif key == ' ':
-            print("Stop")
+            print("Stop Drive")
             self.rover.stop()
+        elif key == 'r':
+            print("Stop Actuators")
+            self.rover.aux_stop()
         elif key == 'x':
-            print("Exiting...")
-            self.rover.stop()
+            print("STOP ALL")
+            self.rover.stop_all()
+        
+        # Exit
+        elif key == '\x1b':  # ESC key
+            print("  Exiting...")
+            self.rover.stop_all()
             self._running = False
 
+
 if __name__ == "__main__":
-    # Configuration - 4 motors in order: FR, FL, BR, BL (USB0-3)
-    print("="*50)
-    print("4-WHEEL SKID-STEER ROVER CONTROL")
-    print("="*50)
+    # Configuration - 6 motors total
+    print("="*60)
+    print("6-MOTOR ROVER CONTROL SYSTEM")
+    print("="*60)
     print("\nMotor Configuration:")
-    print("USB0 Front Right (FR)")
-    print("USB1 Front Left (FL)")
-    print("USB2 Back Right (BR)")
-    print("USB3 Back Left (BL)")
+    print("  USB0  Front Right (FR) - Drive")
+    print("  USB1  Front Left (FL) - Drive")
+    print("  USB2  Back Right (BR) - Drive")
+    print("  USB3  Back Left (BL) - Drive")
+    print("  USB4  actuator 1 - Excavation")
+    print("  USB5  actuator 2 - Excavation")
     
     FR_PORT = "/dev/ttyUSB0"
     FL_PORT = "/dev/ttyUSB1"
     BR_PORT = "/dev/ttyUSB2"
     BL_PORT = "/dev/ttyUSB3"
-
+    AUX1_PORT = "/dev/ttyUSB4"
+    AUX2_PORT = "/dev/ttyUSB5"
 
     # Create rover instance
-    rover = SkidSteerRover(FR_PORT, FL_PORT, BR_PORT, BL_PORT)
+    rover = SkidSteerRover(FR_PORT, FL_PORT, BR_PORT, BL_PORT, AUX1_PORT, AUX2_PORT)
     
     try:
         # Connect to rover
         rover.connect()
         
-        print("Keyboard Teleop")
-        
+        # Run teleop
         teleop = KeyboardTeleop(rover)
         teleop.run()
-
     
     except KeyboardInterrupt:
-        print("\n\nInterrupted by user")
+        print("\n\n Interrupted by user")
     
     except Exception as e:
-        print(f"\nError occurred: {e}")
+        print(f"\n Error occurred: {e}")
     
     finally:
+        rover.stop_all()
         rover.disconnect()
-        print("\nShutdown complete. Goodbye!")
+        print("\n Shutdown complete. Goodbye!")

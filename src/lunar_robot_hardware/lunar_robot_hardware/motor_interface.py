@@ -2,7 +2,7 @@
 """
 Motor Interface - Hardware Abstraction Layer
 OOP design for real rover motor control via USB serial
-NOW INCLUDES: 4 drive motors + 2 auxiliary motors
+4 drive motors + 2 actuators motors
 """
 
 import serial
@@ -128,15 +128,14 @@ class Motor:
         self.disconnect()
 
 
-class AuxiliaryMotorPair:
+class ActuatorsMotorPair:
     """
-    Pair of auxiliary motors that move together
-    Used for things like excavation, collection mechanisms, etc.
+    Pair of actuators motors that move together
     """
     
-    def __init__(self, motor1: Motor, motor2: Motor, name: str = "Auxiliary"):
+    def __init__(self, motor1: Motor, motor2: Motor, name: str = "actuators"):
         """
-        Initialize auxiliary motor pair
+        Initialize actuators motor pair
         
         Args:
             motor1: First motor
@@ -207,9 +206,9 @@ class SkidSteerChassis:
                 success = False
         
         if success:
-            print("✓ Chassis fully connected!")
+            print("Chassis fully connected!")
         else:
-            print("✗ Some motors failed to connect")
+            print("Some motors failed to connect")
         
         return success
     
@@ -224,7 +223,7 @@ class SkidSteerChassis:
         self._emergency_stop = True
         for motor in self.motors.values():
             motor.stop()
-        print("🛑 EMERGENCY STOP ACTIVATED")
+        print("EMERGENCY STOP ACTIVATED")
     
     def clear_emergency_stop(self):
         """Clear emergency stop state"""
@@ -351,16 +350,16 @@ class SkidSteerChassis:
 
 class CompleteRover:
     """
-    Complete rover system with drive chassis + auxiliary motors
+    Complete rover system with drive chassis + actuators motors
     """
     
-    def __init__(self, chassis: SkidSteerChassis, aux_motors: AuxiliaryMotorPair):
+    def __init__(self, chassis: SkidSteerChassis, aux_motors: ActuatorsMotorPair):
         """
         Initialize complete rover
         
         Args:
             chassis: SkidSteerChassis for driving
-            aux_motors: AuxiliaryMotorPair for auxiliary functions
+            aux_motors: ActuatorsMotorPair for actuators functions
         """
         self.chassis = chassis
         self.aux_motors = aux_motors
@@ -386,7 +385,7 @@ class CompleteRover:
         return self.chassis.is_fully_connected and self.aux_motors.is_connected
 
 
-# ==================== FACTORY FUNCTIONS ====================
+#  FACTORY FUNCTIONS 
 
 def create_chassis_from_ports(fr_port: str, fl_port: str, 
                               br_port: str, bl_port: str,
@@ -403,11 +402,11 @@ def create_chassis_from_ports(fr_port: str, fl_port: str,
 
 def create_aux_motors_from_ports(port1: str, port2: str,
                                  baudrate: int = 9600,
-                                 name: str = "Auxiliary") -> AuxiliaryMotorPair:
-    """Create auxiliary motor pair from port strings"""
+                                 name: str = "actuators") -> ActuatorsMotorPair:
+    """Create actuators motor pair from port strings"""
     motor1 = Motor(MotorConfig(port1, f'{name}_1', baudrate))
     motor2 = Motor(MotorConfig(port2, f'{name}_2', baudrate))
-    return AuxiliaryMotorPair(motor1, motor2, name)
+    return ActuatorsMotorPair(motor1, motor2, name)
 
 
 def create_complete_rover(fr_port: str, fl_port: str, br_port: str, bl_port: str,
@@ -421,8 +420,8 @@ def create_complete_rover(fr_port: str, fl_port: str, br_port: str, bl_port: str
         fl_port: Front left drive motor
         br_port: Back right drive motor
         bl_port: Back left drive motor
-        aux1_port: Auxiliary motor 1
-        aux2_port: Auxiliary motor 2
+        aux1_port: actuators motor 1
+        aux2_port: actuators motor 2
         baudrate: Serial communication rate
     """
     chassis = create_chassis_from_ports(fr_port, fl_port, br_port, bl_port, baudrate)
@@ -457,15 +456,15 @@ if __name__ == '__main__':
             rover.chassis.stop()
             time.sleep(1)
             
-            print("Test 3: Auxiliary motors forward for 2 seconds")
+            print("Test 3: actuators motors up for 2 seconds")
             rover.aux_motors.forward()
             time.sleep(2)
             
-            print("Test 4: Auxiliary motors backward for 2 seconds")
+            print("Test 4: actuators motors down for 2 seconds")
             rover.aux_motors.backward()
             time.sleep(2)
             
-            print("Test 5: Stop auxiliary")
+            print("Test 5: Stop actuators")
             rover.aux_motors.stop()
             time.sleep(1)
             

@@ -67,13 +67,13 @@ class RealRoverLauncher(QWidget):
 
         main_layout = QVBoxLayout()
 
-        # ==================== HEADER ====================
-        header = QLabel("🤖 Real Rover Hardware Control")
+        # HEADER
+        header = QLabel("Rover Hardware Control")
         header.setFont(QFont("Arial", 18, QFont.Bold))
         header.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header)
 
-        # ==================== HARDWARE CONFIGURATION ====================
+        # HARDWARE CONFIGURATION
         config_group = QGroupBox("Hardware Configuration")
         config_layout = QVBoxLayout()
         
@@ -92,26 +92,26 @@ class RealRoverLauncher(QWidget):
         config_group.setLayout(config_layout)
         main_layout.addWidget(config_group)
 
-        # ==================== STOP ALL ====================
-        stop_all_btn = QPushButton("🛑 EMERGENCY STOP ALL")
+        # STOP ALL
+        stop_all_btn = QPushButton("EMERGENCY STOP ALL")
         stop_all_btn.setFont(QFont("Arial", 16))
         stop_all_btn.setStyleSheet("background-color: #ff4444; color: white;")
         stop_all_btn.clicked.connect(self.stop_all_processes)
         main_layout.addWidget(stop_all_btn)
 
-        # ==================== QUICK LAUNCH OPTIONS ====================
-        quick_group = QGroupBox("🚀 Quick Launch Options")
+        # QUICK LAUNCH OPTIONS
+        quick_group = QGroupBox("Quick Launch Options")
         quick_layout = QVBoxLayout()
         
         # Full system launch button
-        full_launch_btn = QPushButton("▶ Launch Complete System (All-in-One)")
+        full_launch_btn = QPushButton("Launch Complete System (All-in-One)")
         full_launch_btn.setFont(QFont("Arial", 12, QFont.Bold))
         full_launch_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px;")
         full_launch_btn.clicked.connect(self.launch_complete_system)
         quick_layout.addWidget(full_launch_btn)
         
         # Camera test button
-        camera_test_btn = QPushButton("📷 Launch Camera Test (No Motors)")
+        camera_test_btn = QPushButton("Launch Camera Test (No Motors)")
         camera_test_btn.setFont(QFont("Arial", 12))
         camera_test_btn.setStyleSheet("background-color: #2196F3; color: white; padding: 10px;")
         camera_test_btn.clicked.connect(self.launch_camera_test)
@@ -120,7 +120,7 @@ class RealRoverLauncher(QWidget):
         quick_group.setLayout(quick_layout)
         main_layout.addWidget(quick_group)
 
-        # ==================== INDIVIDUAL COMPONENTS ====================
+        # INDIVIDUAL COMPONENTS
         components_group = QGroupBox("Individual Component Control")
         components_layout = QVBoxLayout()
 
@@ -156,7 +156,7 @@ ros2 run robot_state_publisher robot_state_publisher \\
         # Camera optical frame transforms
         components_layout.addWidget(self.create_control_block(
             "camera_transforms",
-            "🔗 Camera Optical Frame Transforms",
+            "Camera Optical Frame Transforms",
             """
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_depth_optical_frame &
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_color_optical_frame &
@@ -168,7 +168,7 @@ wait
         # Motor controller
         components_layout.addWidget(self.create_control_block(
             "motor_controller",
-            "🔧 Motor Controller (4-Wheel Drive)",
+            "Motor Controller (4-Wheel Drive)",
             f"""
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -185,7 +185,7 @@ ros2 run lunar_robot_hardware motor_controller_node \\
         # Front camera
         components_layout.addWidget(self.create_control_block(
             "front_camera",
-            "📷 Front Camera (D435 - RGB + Depth + Point Cloud)",
+            "Front Camera (D435 - RGB + Depth + Point Cloud)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -202,7 +202,7 @@ ros2 launch realsense2_camera rs_launch.py \\
         # Rear camera
         components_layout.addWidget(self.create_control_block(
             "rear_camera",
-            "📷 Rear Camera (T265 - RGB Only)",
+            "Rear Camera (T265 - RGB Only)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -217,7 +217,7 @@ ros2 launch realsense2_camera rs_launch.py \\
         # Navigation
         components_layout.addWidget(self.create_control_block(
             "navigation",
-            "🗺️ Unified Navigator (Point-Click + Obstacle Avoidance)",
+            "Unified Navigator (Point-Click + Obstacle Avoidance)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -229,7 +229,7 @@ ros2 run lunar_robot_autonomous unified_navigator \\
         # RViz
         components_layout.addWidget(self.create_control_block(
             "rviz",
-            "👁️ RViz Visualization",
+            "RViz Visualization",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
@@ -241,7 +241,7 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/src/lunar_robot_description/config/real
         # Teleop
         components_layout.addWidget(self.create_control_block(
             "teleop",
-            "⌨️ Keyboard Teleop (Simple - Drive + Camera)",
+            "Keyboard Teleop (Simple - Drive + Camera)",
             """
 cd ~/lunar_rover_ws
 source install/setup.bash
