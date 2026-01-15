@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="lunar_robot">
+
+  <xacro:property name="config" value="${xacro.load_yaml('$(find lunar_robot_description)/config/robot_dimensions.yaml')}"/>
+  
+  <xacro:include filename="$(find lunar_robot_description)/urdf/materials.xacro"/>
+  <xacro:include filename="$(find lunar_robot_description)/urdf/lunar_robot_core.xacro"/>
+  <xacro:include filename="$(find lunar_robot_description)/urdf/sensors/d435_camera.xacro"/>
+  <xacro:include filename="$(find lunar_robot_description)/urdf/sensors/t265_camera.xacro"/>
+
+  <xacro:property name="chassis_length" value="${config['chassis']['length']}"/>
+  <xacro:property name="chassis_width" value="${config['chassis']['width']}"/>
+  <xacro:property name="chassis_height" value="${config['chassis']['height']}"/>
+  <xacro:property name="chassis_mass" value="${config['chassis']['mass']}"/>
+  
+  <xacro:property name="wheel_radius" value="${config['wheels']['radius']}"/>
+  <xacro:property name="wheel_width" value="${config['wheels']['width']}"/>
+  <xacro:property name="wheel_mass" value="${config['wheels']['mass']}"/>
+  <xacro:property name="wheel_separation" value="${config['wheels']['separation']}"/>
+
+  <xacro:property name="camera_x_offset" value="0.3"/>
+  <xacro:property name="camera_z_offset" value="0.5"/>
+  <xacro:property name="camera_y_spacing" value="0.03"/>
+
+  <xacro:lunar_robot_core 
+    chassis_length="${chassis_length}"
+    chassis_width="${chassis_width}" 
+    chassis_height="${chassis_height}"
+    chassis_mass="${chassis_mass}"
+    wheel_radius="${wheel_radius}"
+    wheel_width="${wheel_width}"
+    wheel_mass="${wheel_mass}"
+    wheel_separation="${wheel_separation}"
+    config="${config}"/>
+
+  <!-- SWAPPED: FRONT D435 camera (Depth sensing for forward navigation) -->
+  <xacro:realsense_d435 
+    parent_link="base_link"
+    xyz="${camera_x_offset} ${camera_y_spacing} ${chassis_height/2 + camera_z_offset}"
+    rpy="0.0 0.35 0.0"
+    prefix="camera"/>
+
+  <!-- SWAPPED: REAR T265 camera (Wide FOV for rear view) -->
+  <xacro:realsense_t265 
+    parent_link="base_link"
+    xyz="${camera_x_offset} ${-camera_y_spacing} ${chassis_height/2 + camera_z_offset}"
+    rpy="0.0 0.0 ${pi}"
+    prefix="camera_rear"/>
+
+  <!-- DiffDrive for movement -->
+  <gazebo>
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+      <left_joint>front_left_wheel_joint</left_joint>
+      <left_joint>rear_left_wheel_joint</left_joint>
+      <right_joint>front_right_wheel_joint</right_joint>
+      <right_joint>rear_right_wheel_joint</right_joint>
+      <wheel_separation>0.45</wheel_separation>
+      <wheel_radius>0.1</wheel_radius>
+      <odom_publish_frequency>50</odom_publish_frequency>
+      <topic>cmd_vel</topic>
+    </plugin>
+  </gazebo>
+  
+  <!-- Joint State Publisher -->
+  <gazebo>
+    <plugin filename="gz-sim-joint-state-publisher-system" 
+            name="gz::sim::systems::JointStatePublisher">
+      <topic>joint_states</topic>
+    </plugin>
+  </gazebo>
+  
+  <!-- Camera rotation control - BOTH cameras rotate together -->
+  <gazebo>
+    <plugin filename="gz-sim-joint-position-controller-system" 
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>camera_mount_joint</joint_name>
+      <topic>camera_rotation</topic>
+      <p_gain>10</p_gain>
+      <i_gain>0.1</i_gain>
+      <d_gain>0.5</d_gain>
+    </plugin>
+  </gazebo>
+  
+  <gazebo>
+    <plugin filename="gz-sim-joint-position-controller-system" 
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>camera_rear_mount_joint</joint_name>
+      <topic>camera_rear_rotation</topic>
+      <p_gain>10</p_gain>
+      <i_gain>0.1</i_gain>
+      <d_gain>0.5</d_gain>
+    </plugin>
+  </gazebo>
+  
+</robot>

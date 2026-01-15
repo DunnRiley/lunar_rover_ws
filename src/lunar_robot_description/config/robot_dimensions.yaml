@@ -1,0 +1,53 @@
+# lunar_robot_description/config/robot_dimensions.yaml
+# Modular robot dimensions - change these to adapt to your physical robot
+
+# Base chassis dimensions (meters)
+chassis:
+  length: 0.6    # front to back
+  width: 0.4     # left to right  
+  height: 0.2    # top to bottom
+  mass: 10.0     # kg
+  
+# Wheel specifications
+wheels:
+  radius: 0.1    # meters
+  width: 0.05    # meters
+  mass: 0.5      # kg each
+  separation: 0.45  # distance between left and right wheels (track width)
+  
+# Wheel positions relative to chassis center
+wheel_positions:
+  front_left:
+    x: 0.2      # forward from center
+    y: 0.225    # left from center
+    z: -0.1     # down from center
+  front_right:
+    x: 0.2
+    y: -0.225
+    z: -0.1
+  rear_left:
+    x: -0.2
+    y: 0.225
+    z: -0.1
+  rear_right:
+    x: -0.2
+    y: -0.225
+    z: -0.1
+
+# Drive system
+drive:
+  max_velocity: 2.0        # m/s
+  max_angular_velocity: 1.5 # rad/s
+  wheel_friction: 1.0
+
+# Future expansion placeholders
+sensors:
+  camera_height: 0.3    # height above chassis
+
+  
+expansion:
+  payload_mass: 0.0     # additional mass for payloads
+  cog_offset:           # center of gravity offset
+    x: 0.0
+    y: 0.0
+    z: 0.0

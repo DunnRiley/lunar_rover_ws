@@ -1,0 +1,3 @@
+[console_scripts]
+hardware_test = lunar_robot_hardware.motor_interface:main
+motor_controller = lunar_robot_hardware.motor_controller:main
