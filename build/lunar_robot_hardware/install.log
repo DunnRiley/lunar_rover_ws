@@ -7,6 +7,7 @@
 /home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/ament_index/resource_index/packages/lunar_robot_hardware.txt
 /home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.xml
 /home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/launch/rover.launch.py
+/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/launch/rtabmap.launch.py
 /home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/launch/camera_test.launch.py
 /home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/launch/static_transforms.launch.py
 /home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/launch/robot_state_publisher.launch.py

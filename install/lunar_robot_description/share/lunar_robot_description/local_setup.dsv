@@ -1,2 +1,1 @@
-source;share/lunar_robot_description/environment/ament_prefix_path.sh
-source;share/lunar_robot_description/environment/path.sh
+/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/local_setup.dsv

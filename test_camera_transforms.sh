@@ -2,9 +2,7 @@
 # Quick test script to verify camera transforms
 # Run this to test if transforms fix the point cloud issue
 
-echo "=========================================="
 echo "Camera Transform Test Script"
-echo "=========================================="
 echo ""
 echo "This script will:"
 echo "1. Publish base_link frame"
@@ -77,9 +75,7 @@ timeout 3 ros2 run tf2_ros tf2_echo base_link camera_depth_optical_frame || echo
 sleep 1
 
 echo ""
-echo "=========================================="
 echo "Starting RViz..."
-echo "=========================================="
 echo ""
 echo "In RViz:"
 echo "1. Check that point cloud appears"

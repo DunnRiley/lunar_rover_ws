@@ -1,0 +1,124 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Global Options:
+    Fixed Frame: map
+    Background Color: 48; 48; 48
+
+  Displays:
+    # Grid
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Reference Frame: map
+      Enabled: true
+      Cell Size: 1.0
+      Color: 160; 160; 164
+      Plane Cell Count: 20
+
+    # TF Frames - MINIMAL
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Axes: true
+      Show Names: false
+      Marker Scale: 0.2
+      Frame Timeout: 15.0
+      All Enabled: false
+      Frames:
+        map:
+          Value: true
+        base_link:
+          Value: true
+        camera_link:
+          Value: true
+
+    # Robot Model
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot Model
+      Enabled: true
+      Description Topic:
+        Value: /robot_description
+        Depth: 5
+      Visual Enabled: true
+
+    # Camera RGB - SMALL window
+    - Class: rviz_default_plugins/Image
+      Name: Camera View
+      Enabled: true
+      Topic:
+        Value: /camera/camera/color/image_raw
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Queue Size: 1
+      Normalize Range: false
+
+    # RTAB-Map Cloud - DOWNSAMPLED
+    - Class: rviz_default_plugins/PointCloud2
+      Name: RTAB-Map Cloud
+      Enabled: true
+      Topic:
+        Value: /rtabmap/cloud_map
+        Depth: 1
+      Size (m): 0.02
+      Style: Points
+      Color Transformer: RGB8
+      Decay Time: 0.0
+      Use Fixed Frame: true
+
+    # Occupancy Grid - THE MOST IMPORTANT FOR NAVIGATION
+    - Class: rviz_default_plugins/Map
+      Name: Map
+      Enabled: true
+      Topic:
+        Value: /rtabmap/grid_map
+        Depth: 1
+      Color Scheme: map
+      Alpha: 0.7
+      Draw Behind: false
+
+    # Odometry Path
+    - Class: rviz_default_plugins/Path
+      Name: Odometry
+      Enabled: true
+      Topic:
+        Value: /odom
+        Depth: 1
+      Color: 255; 85; 0
+      Line Style: Lines
+      Line Width: 0.03
+
+    # RTAB-Map Path (optimized trajectory)
+    - Class: rviz_default_plugins/Path
+      Name: Map Path
+      Enabled: true
+      Topic:
+        Value: /rtabmap/mapPath
+        Depth: 1
+      Color: 0; 255; 0
+      Line Style: Lines
+      Line Width: 0.05
+
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/SetGoal
+      Topic: /goal_pose
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic: /initialpose
+
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Top View
+      Enable Stereo Rendering: false
+      Scale: 20.0
+      X: 0.0
+      Y: 0.0
+      Angle: 0.0

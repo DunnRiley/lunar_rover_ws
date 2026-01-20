@@ -42,10 +42,10 @@ class ActuatorController:
                 timeout=1
             )
             self.stop()
-            print(f"✓ Actuators connected on {self.port1} and {self.port2}")
+            print(f"Actuators connected on {self.port1} and {self.port2}")
             return True
         except serial.SerialException as e:
-            print(f"✗ Failed to connect actuators: {e}")
+            print(f"Failed to connect actuators: {e}")
             return False
     
     def disconnect(self):
@@ -101,10 +101,10 @@ class CameraMotorController:
                 timeout=1
             )
             self.stop()
-            print(f"✓ Camera motor connected on {self.port}")
+            print(f"Camera motor connected on {self.port}")
             return True
         except serial.SerialException as e:
-            print(f"✗ Failed to connect camera motor: {e}")
+            print(f"Failed to connect camera motor: {e}")
             return False
     
     def disconnect(self):
@@ -173,7 +173,7 @@ class CameraMotorController:
                 time.sleep(0.1)
         
         self.current_angle = 0.0
-        print("✓ Camera centered")
+        print("Camera centered")
 
 
 class CompleteTeleop(Node):
@@ -202,38 +202,38 @@ class CompleteTeleop(Node):
         self.print_instructions()
         
     def print_instructions(self):
-        camera_status = "✓ CONNECTED" if self.camera_connected else "✗ NOT CONNECTED"
-        actuator_status = "✓ CONNECTED" if self.actuators_connected else "✗ NOT CONNECTED"
+        camera_status = "CONNECTED" if self.camera_connected else "NOT CONNECTED"
+        actuator_status = "CONNECTED" if self.actuators_connected else "NOT CONNECTED"
         
         msg = f"""
-╔════════════════════════════════════════════════════════╗
-║           ROVER COMPLETE TELEOP CONTROLS               ║
-╠════════════════════════════════════════════════════════╣
-║ ROBOT MOVEMENT (4-Wheel Drive):                       ║
-║   W - Forward                                          ║
-║   S - Backward                                         ║
-║   A - Turn Left                                        ║
-║   D - Turn Right                                       ║
-║   X - STOP DRIVE                                       ║
-║                                                        ║
-║ CAMERA ROTATION (USB7): {camera_status:27s} ║
-║   T - Rotate Left                                      ║
-║   G - Rotate Right                                     ║
-║   Z - Center Camera                                    ║
-║   Current Angle: {self.camera_motor.current_angle:5.1f}°                           ║
-║                                                        ║
-║ ACTUATORS (USB4 & USB5): {actuator_status:25s} ║
-║   Q - Extend Actuators                                 ║
-║   E - Retract Actuators                                ║
-║   R - STOP ACTUATORS                                   ║
-║                                                        ║
-║ EMERGENCY:                                             ║
-║   SPACE - EMERGENCY STOP ALL                           ║
-║                                                        ║
-║ INFO:                                                  ║
-║   H - Show this help                                   ║
-║   CTRL+C - Quit                                        ║
-╚════════════════════════════════════════════════════════╝
+
+           ROVER COMPLETE TELEOP CONTROLS               
+
+ ROBOT MOVEMENT (4-Wheel Drive):                       
+   W - Forward                                          
+   S - Backward                                         
+   A - Turn Left                                        
+   D - Turn Right                                       
+   X - STOP DRIVE                                       
+                                                        
+ CAMERA ROTATION (USB7): {camera_status:27s} 
+   T - Rotate Left                                      
+   G - Rotate Right                                     
+   Z - Center Camera                                    
+   Current Angle: {self.camera_motor.current_angle:5.1f}°                           
+                                                        
+ ACTUATORS (USB4 & USB5): {actuator_status:25s} 
+   Q - Extend Actuators                                 
+   E - Retract Actuators                                
+   R - STOP ACTUATORS                                   
+                                                        
+ EMERGENCY:                                             
+   SPACE - EMERGENCY STOP ALL                           
+                                                        
+ INFO:                                                  
+   H - Show this help                                   
+   CTRL+C - Quit                                        
+
 
 Speeds: Linear={self.linear_speed:.1f} m/s, Angular={self.angular_speed:.1f} rad/s
 Ready for commands!
@@ -248,7 +248,7 @@ Ready for commands!
     
     def emergency_stop_all(self):
         """Emergency stop everything"""
-        self.get_logger().error('🚨 EMERGENCY STOP ALL 🚨')
+        self.get_logger().error('EMERGENCY STOP ALL')
         
         # Stop drive
         self.cmd_vel_pub.publish(Twist())
@@ -276,73 +276,73 @@ Ready for commands!
                 # ROBOT MOVEMENT
                 elif key == 'w':
                     twist.linear.x = self.linear_speed
-                    self.get_logger().info('🚗 Forward')
+                    self.get_logger().info('Forward')
                     self.cmd_vel_pub.publish(twist)
                     
                 elif key == 's':
                     twist.linear.x = -self.linear_speed
-                    self.get_logger().info('🚗 Backward')
+                    self.get_logger().info('Backward')
                     self.cmd_vel_pub.publish(twist)
                     
                 elif key == 'a':
                     twist.angular.z = self.angular_speed
-                    self.get_logger().info('🔄 Turn Left')
+                    self.get_logger().info('Turn Left')
                     self.cmd_vel_pub.publish(twist)
                     
                 elif key == 'd':
                     twist.angular.z = -self.angular_speed
-                    self.get_logger().info('🔄 Turn Right')
+                    self.get_logger().info('Turn Right')
                     self.cmd_vel_pub.publish(twist)
                     
                 elif key == 'x':
-                    self.get_logger().warn('🛑 Stop Drive')
+                    self.get_logger().warn('Stop Drive')
                     self.cmd_vel_pub.publish(twist)
                 
                 # CAMERA ROTATION
                 elif key == 't':
                     if self.camera_connected:
-                        self.get_logger().info(f'📷 Camera Left ({self.camera_motor.current_angle:.1f}°)')
+                        self.get_logger().info(f'Camera Left ({self.camera_motor.current_angle:.1f}°)')
                         self.camera_motor.rotate_left()
                     else:
-                        self.get_logger().warn('⚠️ Camera motor not connected!')
+                        self.get_logger().warn('Camera motor not connected!')
                     
                 elif key == 'g':
                     if self.camera_connected:
-                        self.get_logger().info(f'📷 Camera Right ({self.camera_motor.current_angle:.1f}°)')
+                        self.get_logger().info(f'Camera Right ({self.camera_motor.current_angle:.1f}°)')
                         self.camera_motor.rotate_right()
                     else:
-                        self.get_logger().warn('⚠️ Camera motor not connected!')
+                        self.get_logger().warn('Camera motor not connected!')
                     
                 elif key == 'z':
                     if self.camera_connected:
                         self.camera_motor.center()
                     else:
-                        self.get_logger().warn('⚠️ Camera motor not connected!')
+                        self.get_logger().warn('Camera motor not connected!')
                 
                 # ACTUATORS
                 elif key == 'q':
                     if self.actuators_connected:
-                        self.get_logger().info('🔧 Actuators Extending')
+                        self.get_logger().info('Actuators Extending')
                         self.actuators.extend()
                         # Auto-stop after short duration for safety
                         time.sleep(0.5)
                         self.actuators.stop()
                     else:
-                        self.get_logger().warn('⚠️ Actuators not connected!')
+                        self.get_logger().warn('Actuators not connected!')
                     
                 elif key == 'e':
                     if self.actuators_connected:
-                        self.get_logger().info('🔧 Actuators Retracting')
+                        self.get_logger().info('Actuators Retracting')
                         self.actuators.retract()
                         # Auto-stop after short duration for safety
                         time.sleep(0.5)
                         self.actuators.stop()
                     else:
-                        self.get_logger().warn('⚠️ Actuators not connected!')
+                        self.get_logger().warn('Actuators not connected!')
                     
                 elif key == 'r':
                     if self.actuators_connected:
-                        self.get_logger().info('🛑 Stop Actuators')
+                        self.get_logger().info('Stop Actuators')
                         self.actuators.stop()
                 
                 # INFO
@@ -354,7 +354,7 @@ Ready for commands!
                     
                 else:
                     if key.isprintable():
-                        self.get_logger().warn(f'❓ Unknown key: "{key}". Press H for help.')
+                        self.get_logger().warn(f'Unknown key: "{key}". Press H for help.')
                 
         except KeyboardInterrupt:
             pass
@@ -369,7 +369,7 @@ Ready for commands!
                 self.actuators.disconnect()
             
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.settings)
-            self.get_logger().info('✓ Teleop shutdown complete')
+            self.get_logger().info('Teleop shutdown complete')
 
 
 def main(args=None):

@@ -258,20 +258,6 @@ class SkidSteerRover:
         for motor in self.right_motors:
             motor.backward()
     
-    def pivot_left(self):
-        """Pivot left - left motors stop, right motors forward"""
-        for motor in self.left_motors:
-            motor.stop()
-        for motor in self.right_motors:
-            motor.forward()
-    
-    def pivot_right(self):
-        """Pivot right - left motors forward, right motors stop"""
-        for motor in self.left_motors:
-            motor.forward()
-        for motor in self.right_motors:
-            motor.stop()
-    
     # actuators motor controls
     def aux_forward(self):
         """Move actuators motors forward"""
@@ -320,8 +306,6 @@ class KeyboardTeleop:
         print("  S - Backward")
         print("  A - Turn Left")
         print("  D - Turn Right")
-        print("  Z - Pivot Left")
-        print("  C - Pivot Right")
         print("\n Actuators MOTORS:")
         print("  Q - Actuators Up")
         print("  E - Actuators Down")
@@ -384,12 +368,6 @@ class KeyboardTeleop:
         elif key == 'd':
             print(" Turn Right")
             self.rover.turn_right()
-        elif key == 'z':
-            print(" Pivot Left")
-            self.rover.pivot_left()
-        elif key == 'c':
-            print(" Pivot Right")
-            self.rover.pivot_right()
         
         # actuators controls
         elif key == 'q':
