@@ -1,0 +1,20 @@
+rgbd_odometry:
+  ros__parameters:
+    frame_id: "camera_link"
+    odom_frame_id: "odom"
+    publish_tf: true
+    subscribe_depth: true
+    subscribe_rgb: true
+    approx_sync: true
+    approx_sync_max_interval: 0.5
+    wait_for_transform: 1.0
+    queue_size: 30
+    
+    Odom/Strategy: "0"
+    Odom/ResetCountdown: "1"
+    Vis/MinInliers: "5"
+    Vis/MaxFeatures: "1000"
+    Vis/FeatureType: "6"
+    Vis/MaxDepth: "4.0"
+    GFTT/MinDistance: "5"
+    GFTT/QualityLevel: "0.001"

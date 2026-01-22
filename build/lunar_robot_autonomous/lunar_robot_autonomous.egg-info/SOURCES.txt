@@ -12,6 +12,7 @@ config/obstical_avoidance.yaml
 config/path_planner.yaml
 launch/unified_navigation.launch.py
 lunar_robot_autonomous/__init__.py
+lunar_robot_autonomous/multi_waypoint_navigator.py
 lunar_robot_autonomous/unified_navigator.py
 resource/lunar_robot_autonomous
 test/test_copyright.py

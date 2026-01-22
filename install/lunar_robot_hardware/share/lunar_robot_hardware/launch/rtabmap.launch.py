@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FIXED RTAB-Map Launch File for D435 Camera
-Correct topic remappings and odometry handling
+OPTIMIZED RTAB-Map Launch - Better Performance
+Reduced resolution, faster processing, lighter visualization
 """
 
 from launch import LaunchDescription
@@ -9,14 +9,11 @@ from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 import os
-from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    # Parameters
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     
-    # Minimal robot URDF
     minimal_urdf = """<?xml version="1.0"?>
 <robot name="lunar_rover">
   <link name="base_link">
@@ -30,12 +27,11 @@ def generate_launch_description():
 """
     
     return LaunchDescription([
-        # Launch arguments
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('localization', default_value='false'),
         DeclareLaunchArgument('database_path', default_value='~/.ros/rtabmap.db'),
         
-        # 1. Robot State Publisher (creates base_link)
+        # 1. Robot State Publisher
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
@@ -52,16 +48,11 @@ def generate_launch_description():
             package='tf2_ros',
             executable='static_transform_publisher',
             name='base_to_camera_link',
-            arguments=[
-                '0.15', '0', '0.2',
-                '0', '0', '0',
-                'base_link',
-                'camera_link'
-            ],
+            arguments=['0.15', '0', '0.2', '0', '0', '0', 'base_link', 'camera_link'],
             output='screen'
         ),
         
-        # 3. D435 Camera - NO REMAPPING HERE, camera publishes to its own namespace
+        # 3. D435 Camera - REDUCED RESOLUTION FOR PERFORMANCE
         Node(
             package='realsense2_camera',
             executable='realsense2_camera_node',
@@ -76,14 +67,17 @@ def generate_launch_description():
                 'enable_infra2': False,
                 'align_depth.enable': True,
                 'enable_sync': True,
-                'depth_module.profile': '640x480x30',
-                'rgb_camera.profile': '640x480x30',
+                # OPTIMIZED: Lower resolution = faster processing
+                'depth_module.profile': '424x240x15',  # Was 640x480x30
+                'rgb_camera.profile': '424x240x15',    # Was 640x480x30
+                # Disable point cloud publishing (RTAB-Map creates its own)
+                'pointcloud.enable': False,
                 'use_sim_time': use_sim_time,
             }],
             output='screen'
         ),
         
-        # 4. RGB-D Odometry - Creates /odom from camera data
+        # 4. RGB-D Odometry - OPTIMIZED
         Node(
             package='rtabmap_odom',
             executable='rgbd_odometry',
@@ -95,15 +89,15 @@ def generate_launch_description():
                 'approx_sync': True,
                 'use_sim_time': use_sim_time,
                 
-                # Odometry parameters
-                'Odom/Strategy': '0',  # Frame-to-Map
+                # OPTIMIZED: Faster odometry
+                'Odom/Strategy': '0',
                 'Odom/ResetCountdown': '1',
-                'Vis/CorGuessWinSize': '20',
-                'Vis/MaxDepth': '4.0',
-                'Vis/MinInliers': '15',
+                'Vis/CorGuessWinSize': '10',  # Reduced from 20
+                'Vis/MaxDepth': '3.0',         # Reduced from 4.0
+                'Vis/MinInliers': '10',        # Reduced from 15
+                'Vis/MaxFeatures': '400',      # Limit features
             }],
             remappings=[
-                # Map RealSense topics to what rgbd_odometry expects
                 ('rgb/image', '/camera/camera/color/image_raw'),
                 ('rgb/camera_info', '/camera/camera/color/camera_info'),
                 ('depth/image', '/camera/camera/aligned_depth_to_color/image_raw'),
@@ -111,7 +105,7 @@ def generate_launch_description():
             output='screen'
         ),
         
-        # 5. RTAB-Map SLAM Node
+        # 5. RTAB-Map SLAM - HIGHLY OPTIMIZED
         Node(
             package='rtabmap_slam',
             executable='rtabmap',
@@ -123,61 +117,47 @@ def generate_launch_description():
                 'subscribe_scan': False,
                 'use_action_for_goal': True,
                 'approx_sync': True,
+                'queue_size': 30,  # Increased buffer
                 
                 # Database
                 'database_path': LaunchConfiguration('database_path'),
                 'Mem/IncrementalMemory': 'true',
                 'Mem/InitWMWithAllNodes': 'false',
                 
-                # Registration
-                'Reg/Strategy': '1',  # ICP
-                'Reg/Force3DoF': 'true',
+                # PERFORMANCE: Process fewer frames
+                'Rtabmap/DetectionRate': '2',       # Process every 2 seconds (was 1)
+                'Rtabmap/TimeThr': '0',             # No time limit
+                'RGBD/LinearUpdate': '0.05',        # Update every 5cm (was 1cm)
+                'RGBD/AngularUpdate': '0.05',       # Update every ~3° (was 0.57°)
                 
-                # Visual features
-                'RGBD/NeighborLinkRefining': 'true',
-                'RGBD/ProximityBySpace': 'true',
-                'RGBD/AngularUpdate': '0.01',
-                'RGBD/LinearUpdate': '0.01',
+                # PERFORMANCE: Reduce features
+                'Vis/MaxFeatures': '400',           # Max features per frame
+                'Vis/MinInliers': '10',             # Min features for valid match
+                'Kp/MaxFeatures': '400',            # Max keypoints
+                'Kp/DetectorStrategy': '6',         # GFTT (faster than ORB)
+                
+                # PERFORMANCE: Lighter mapping
+                'Grid/FromDepth': 'true',           # Use depth instead of features
+                'Grid/MaxObstacleHeight': '0.4',
+                'Grid/MinObstacleHeight': '0.05',
+                'Grid/RangeMax': '3.0',             # Limit mapping range
+                'Grid/CellSize': '0.05',            # 5cm grid cells
+                'Grid/DepthDecimation': '4',        # Downsample depth
+                
+                # PERFORMANCE: Lighter loop closure
+                'RGBD/ProximityBySpace': 'false',   # Disable proximity detection
+                'RGBD/NeighborLinkRefining': 'false', # Disable refinement
                 'RGBD/OptimizeFromGraphEnd': 'false',
                 
-                # Loop closure
-                'Kp/MaxDepth': '4.0',
-                'Kp/DetectorStrategy': '0',  # GFTT/BRIEF -> 0=GFTT/ORB (works without xfeatures2d)
+                # Registration
+                'Reg/Strategy': '1',                # ICP
+                'Reg/Force3DoF': 'true',           # 2D only
+                'Icp/PointToPlane': 'true',
+                'Icp/Iterations': '10',             # Reduced iterations
+                'Icp/VoxelSize': '0.05',           # 5cm voxels
+                'Icp/MaxTranslation': '0.2',
+                'Icp/MaxCorrespondenceDistance': '0.1',
                 
-                # Grid mapping
-                'Grid/FromDepth': 'false',
-                'Grid/MaxObstacleHeight': '0.4',
-                'Grid/MinObstacleHeight': '0.1',
-                
-                # Performance
-                'RGBD/OptimizeMaxError': '0.1',
-                'Rtabmap/TimeThr': '700',
-                'Rtabmap/DetectionRate': '1',
-                
-                'use_sim_time': use_sim_time,
-            }],
-            remappings=[
-                # Map RealSense topics to what RTAB-Map expects
-                ('rgb/image', '/camera/camera/color/image_raw'),
-                ('rgb/camera_info', '/camera/camera/color/camera_info'),
-                ('depth/image', '/camera/camera/aligned_depth_to_color/image_raw'),
-                # Odometry comes from rgbd_odometry node above
-            ],
-            arguments=['--delete_db_on_start'] if not LaunchConfiguration('localization') else [],
-            output='screen'
-        ),
-        
-        # 6. RTAB-Map Visualization
-        Node(
-            package='rtabmap_viz',
-            executable='rtabmap_viz',
-            name='rtabmap_viz',
-            parameters=[{
-                'frame_id': 'base_link',
-                'subscribe_depth': True,
-                'subscribe_rgb': True,
-                'subscribe_odom_info': True,
-                'approx_sync': True,
                 'use_sim_time': use_sim_time,
             }],
             remappings=[
@@ -185,10 +165,11 @@ def generate_launch_description():
                 ('rgb/camera_info', '/camera/camera/color/camera_info'),
                 ('depth/image', '/camera/camera/aligned_depth_to_color/image_raw'),
             ],
+            arguments=['--delete_db_on_start'],
             output='screen'
         ),
         
-        # 7. RViz with RTAB-Map visualization
+        # 6. RViz - Optimized Config
         Node(
             package='rviz2',
             executable='rviz2',
@@ -196,11 +177,11 @@ def generate_launch_description():
             arguments=['-d', os.path.join(
                 os.path.expanduser('~'),
                 'lunar_rover_ws',
-                'rtabmap_navigation.rviz'
+                'rtabmap_rviz_optimized.rviz'
             )] if os.path.exists(os.path.join(
                 os.path.expanduser('~'),
                 'lunar_rover_ws',
-                'rtabmap_navigation.rviz'
+                'rtabmap_rviz_optimized.rviz'
             )) else [],
             parameters=[{'use_sim_time': use_sim_time}],
             output='screen'

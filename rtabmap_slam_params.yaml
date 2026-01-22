@@ -1,0 +1,32 @@
+rtabmap:
+  ros__parameters:
+    frame_id: "camera_link"
+    odom_frame_id: "odom"
+    map_frame_id: "map"
+    subscribe_depth: true
+    subscribe_rgb: true
+    subscribe_odom_info: true
+    approx_sync: true
+    wait_for_transform: 1.0
+    queue_size: 50
+    topic_queue_size: 20
+    
+    Mem/IncrementalMemory: "true"
+    Mem/InitWMWithAllNodes: "false"
+    Rtabmap/DetectionRate: "1.0"
+    RGBD/LinearUpdate: "0.05"
+    RGBD/AngularUpdate: "0.05"
+    Vis/MinInliers: "5"
+    Vis/MaxFeatures: "1000"
+    Kp/MaxFeatures: "1000"
+    Kp/DetectorStrategy: "6"
+    Grid/FromDepth: "true"
+    Grid/MaxObstacleHeight: "0.4"
+    Grid/MinObstacleHeight: "0.05"
+    Grid/RangeMax: "5.0"
+    Grid/CellSize: "0.05"
+    Grid/DepthDecimation: "4"
+    Reg/Strategy: "1"
+    Reg/Force3DoF: "true"
+    Icp/VoxelSize: "0.05"
+    Icp/MaxTranslation: "0.2"

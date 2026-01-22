@@ -19,22 +19,15 @@ Visualization Manager:
       Color: 160; 160; 164
       Plane Cell Count: 20
 
-    # TF Frames - MINIMAL
+    # TF Frames
     - Class: rviz_default_plugins/TF
       Name: TF
       Enabled: true
       Show Axes: true
-      Show Names: false
-      Marker Scale: 0.2
+      Show Names: true
+      Marker Scale: 0.3
       Frame Timeout: 15.0
-      All Enabled: false
-      Frames:
-        map:
-          Value: true
-        base_link:
-          Value: true
-        camera_link:
-          Value: true
+      All Enabled: true
 
     # Robot Model
     - Class: rviz_default_plugins/RobotModel
@@ -45,22 +38,45 @@ Visualization Manager:
         Depth: 5
       Visual Enabled: true
 
-    # Camera RGB - SMALL window
+    # Camera Image (small window)
     - Class: rviz_default_plugins/Image
-      Name: Camera View
+      Name: Camera RGB
       Enabled: true
       Topic:
         Value: /camera/camera/color/image_raw
         Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
       Queue Size: 1
-      Normalize Range: false
+      Transport: raw
+      Normalize Range: true
 
-    # RTAB-Map Cloud - DOWNSAMPLED
+    # Camera Depth Image
+    - Class: rviz_default_plugins/Image
+      Name: Camera Depth
+      Enabled: true
+      Topic:
+        Value: /camera/camera/aligned_depth_to_color/image_raw
+        Depth: 1
+      Queue Size: 1
+      Transport: raw
+      Normalize Range: true
+
+    # LIVE Camera Point Cloud - CORRECT TOPIC!
     - Class: rviz_default_plugins/PointCloud2
-      Name: RTAB-Map Cloud
+      Name: Live Camera Point Cloud
+      Enabled: true
+      Topic:
+        Value: /camera/camera/depth/color/points
+        Depth: 1
+      Size (m): 0.01
+      Style: Points
+      Color Transformer: RGB8
+      Decay Time: 0.0
+      Use Fixed Frame: true
+      Use rainbow: false
+
+    # RTAB-Map Point Cloud (Persistent Map)
+    - Class: rviz_default_plugins/PointCloud2
+      Name: RTAB-Map Cloud (Persistent)
       Enabled: true
       Topic:
         Value: /rtabmap/cloud_map
@@ -71,9 +87,9 @@ Visualization Manager:
       Decay Time: 0.0
       Use Fixed Frame: true
 
-    # Occupancy Grid - THE MOST IMPORTANT FOR NAVIGATION
+    # Occupancy Grid (CRITICAL FOR NAVIGATION!)
     - Class: rviz_default_plugins/Map
-      Name: Map
+      Name: Occupancy Grid
       Enabled: true
       Topic:
         Value: /rtabmap/grid_map
@@ -84,18 +100,18 @@ Visualization Manager:
 
     # Odometry Path
     - Class: rviz_default_plugins/Path
-      Name: Odometry
+      Name: Odometry Path
       Enabled: true
       Topic:
-        Value: /odom
+        Value: /rtabmap/odom_path
         Depth: 1
-      Color: 255; 85; 0
+      Color: 255; 100; 0
       Line Style: Lines
       Line Width: 0.03
 
-    # RTAB-Map Path (optimized trajectory)
+    # RTAB-Map Optimized Path
     - Class: rviz_default_plugins/Path
-      Name: Map Path
+      Name: Map Path (RTAB-Map)
       Enabled: true
       Topic:
         Value: /rtabmap/mapPath
@@ -104,21 +120,46 @@ Visualization Manager:
       Line Style: Lines
       Line Width: 0.05
 
+    # Waypoint Markers
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Waypoints
+      Enabled: true
+      Topic:
+        Value: /waypoint_markers
+        Depth: 5
+      Queue Size: 100
+
+    # Waypoint Path
+    - Class: rviz_default_plugins/Path
+      Name: Waypoint Path
+      Enabled: true
+      Topic:
+        Value: /waypoint_path
+        Depth: 5
+      Color: 255; 255; 0
+      Line Style: Lines
+      Line Width: 0.08
+      Alpha: 0.8
+
   Tools:
     - Class: rviz_default_plugins/Interact
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
-    - Class: rviz_default_plugins/SetGoal
-      Topic: /goal_pose
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
     - Class: rviz_default_plugins/SetInitialPose
       Topic: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic: /goal_pose
+    - Class: rviz_default_plugins/PublishPoint
+      Topic: /clicked_point
 
   Views:
     Current:
       Class: rviz_default_plugins/TopDownOrtho
       Name: Top View
       Enable Stereo Rendering: false
-      Scale: 20.0
+      Scale: 10.0
       X: 0.0
       Y: 0.0
       Angle: 0.0
