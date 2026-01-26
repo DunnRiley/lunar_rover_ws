@@ -12,7 +12,7 @@ launch/camera_test.launch.py
 launch/robot_state_publisher.launch.py
 launch/rover.launch.py
 launch/rtabmap.launch.py
-launch/rtabmap_multi_waypoint.launch.py
+launch/rtabmap_waypoint.launch.py
 launch/static_transforms.launch.py
 lunar_robot_hardware/ __init__.py
 lunar_robot_hardware/motor_controller.py

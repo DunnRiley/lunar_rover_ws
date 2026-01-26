@@ -1,30 +1,30 @@
-# lunar_rover_ws
-How to run:
+## lunar_rover_ws
+# How to run:
 
 cd ~/lunar_rover_ws
 colcon build 
 source install/setup.bash
 
-// Python script with buttons to all needed ros nodes and rviz need to add RTAB-Map
+# Python script with buttons to all needed ros nodes and rviz need to add RTAB-Map
 python3 rover_launcher.py
 
-// Test motors individualy 
+# Test motors individualy 
 python3 single_motor_test.py
 
-// Test drive chain and actuators 
+# Test drive chain and actuators 
 python3 test_drive.py
 
-// Test Camera
+# Test Camera
 ros2 launch realsense_camera rs_launch.py
 ros2 run rviz2 rviz2
 
-or
+# or
 
 bash test_camera_transforms.sh
 
-or 
-
-bash rtabmap_with_navigation.sh
+# or 
+// not tested
+ bash rtabmap_with_navigation.sh
 
 //////////////////////////////////////////////////////////////////////////
 test_drive works. Have not tested OOP for driving and actuators.
@@ -41,24 +41,30 @@ colcon build
 source install/setup.bash
 
 
-// Hardware
+# Hardware
 ros2 run lunar_robot_hardware motor_controller_node
 
-// Camera 
+# Camera 
+# Step 1: Fix USB stability (run once per boot)
+cd ~/lunar_rover_ws
+chmod +x fix_camera_usb.sh
+sudo ./fix_camera_usb.sh
+
+# Step 2 Launch 
 ros2 launch realsense2_camera rs_launch.py
 
 ros2 run tf2_ros tf2_echo base_link camera_depth_optical_frame
 
-// Navigation
+# Navigation
 ros2 run lunar_robot_autonomous unified_navigator
 
-or 
+# or 
 
 ros2 run lunar_robot_autonomous rtabmap_multi_waypoint
 
-// Teleop 
+# Teleop 
 python3 teleop_keyboard.py
 
-or 
+# or 
 
 python3 controller_teleop.py

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Real Rover Hardware Launch System - FIXED VERSION
+Real Rover Hardware Launch System
 - Proper camera transforms for D435 point cloud
 - Support for new IFWATER stereo camera
 - Simplified for real hardware only

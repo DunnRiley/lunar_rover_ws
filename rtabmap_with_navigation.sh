@@ -1,5 +1,5 @@
 #!/bin/bash
-# RTAB-Map Multi-Waypoint Navigation - FIXED timing issues
+# RTAB-Map Multi-Waypoint Navigation
 # Waits for camera to be fully ready before starting RTAB-Map
 
 echo "   RTAB-Map Multi-Waypoint Navigation System           "
