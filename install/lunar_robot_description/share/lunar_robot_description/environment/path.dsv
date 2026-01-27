@@ -1,1 +1,1 @@
-/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/path.dsv
+prepend-non-duplicate-if-exists;PATH;bin

@@ -1,1 +1,0 @@
-/home/rileydunn/lunar_rover_ws/src/lunar_robot_hardware/launch/robot_state_publisher.launch.py
