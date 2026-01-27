@@ -1,0 +1,29 @@
+This is the naming Scheme for the Pins
+Board Naming Convention	
+F	Front
+B	Back
+R	Right
+L	Left
+AC	Actuator
+MD	Motor Driver
+MDD	Dual Motor Driver
+ENC	Encoder
+A	ENC channel 1
+B	ENC channel 2
+5V	Board 5V
+GND	com
+MOSI	Master Output Slave Input
+MISO	Master Input Slave output
+CS	Chip Select
+SCK	Serial Clock for SPI
+SCL	Serial Clock for I2C
+SDA	Serial Data
+GPIO	General Purpose I/O pins
+PWM	Pulse Width Modulation
+DIR	Direction
+BK	Backup
+SERVO	PWM servo slot
+I2C Com	Port suited for i2c communications
+EX	Extra
+W	Wheel
+AC	Actuator
