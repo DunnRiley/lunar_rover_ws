@@ -7,19 +7,21 @@ Panels:
 Visualization Manager:
   Global Options:
     Fixed Frame: map
-    Background Color: 48; 48; 48
+    Background Color: 30; 30; 30
 
   Displays:
-    # Grid
+    # ========== BASIC ==========
+    
     - Class: rviz_default_plugins/Grid
       Name: Grid
       Reference Frame: map
       Enabled: true
-      Cell Size: 1.0
+      Cell Size: 0.5
       Color: 160; 160; 164
-      Plane Cell Count: 20
+      Plane Cell Count: 40
+      Line Style:
+        Line Width: 0.03
 
-    # TF Frames
     - Class: rviz_default_plugins/TF
       Name: TF
       Enabled: true
@@ -27,119 +29,130 @@ Visualization Manager:
       Show Names: true
       Marker Scale: 0.3
       Frame Timeout: 15.0
-      All Enabled: true
+      All Enabled: false
+      Frames:
+        map:
+          Value: true
+        odom:
+          Value: true
+        base_link:
+          Value: true
+        camera_link:
+          Value: true
 
-    # Robot Model
-    - Class: rviz_default_plugins/RobotModel
-      Name: Robot Model
-      Enabled: true
-      Description Topic:
-        Value: /robot_description
-        Depth: 5
-      Visual Enabled: true
-
-    # Camera Image (small window)
+    # ========== CAMERA ==========
+    
     - Class: rviz_default_plugins/Image
       Name: Camera RGB
       Enabled: true
       Topic:
         Value: /camera/camera/color/image_raw
-        Depth: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
       Queue Size: 1
-      Transport: raw
       Normalize Range: true
 
-    # Camera Depth Image
     - Class: rviz_default_plugins/Image
       Name: Camera Depth
-      Enabled: true
+      Enabled: false
       Topic:
         Value: /camera/camera/aligned_depth_to_color/image_raw
-        Depth: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
       Queue Size: 1
-      Transport: raw
       Normalize Range: true
 
-    # LIVE Camera Point Cloud - CORRECT TOPIC!
+    # ========== LIVE POINT CLOUD ==========
+    
     - Class: rviz_default_plugins/PointCloud2
-      Name: Live Camera Point Cloud
+      Name: Live Camera Cloud
       Enabled: true
       Topic:
         Value: /camera/camera/depth/color/points
-        Depth: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
       Size (m): 0.01
       Style: Points
       Color Transformer: RGB8
       Decay Time: 0.0
       Use Fixed Frame: true
-      Use rainbow: false
 
-    # RTAB-Map Point Cloud (Persistent Map)
+    # ========== RTAB-MAP OUTPUTS ==========
+    
     - Class: rviz_default_plugins/PointCloud2
       Name: RTAB-Map Cloud (Persistent)
       Enabled: true
       Topic:
         Value: /rtabmap/cloud_map
-        Depth: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
       Size (m): 0.02
       Style: Points
       Color Transformer: RGB8
       Decay Time: 0.0
       Use Fixed Frame: true
+      Alpha: 0.8
 
-    # Occupancy Grid (CRITICAL FOR NAVIGATION!)
     - Class: rviz_default_plugins/Map
       Name: Occupancy Grid
       Enabled: true
       Topic:
         Value: /rtabmap/grid_map
-        Depth: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
       Color Scheme: map
       Alpha: 0.7
       Draw Behind: false
 
-    # Odometry Path
     - Class: rviz_default_plugins/Path
       Name: Odometry Path
       Enabled: true
       Topic:
         Value: /rtabmap/odom_path
-        Depth: 1
-      Color: 255; 100; 0
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 255; 150; 0
       Line Style: Lines
       Line Width: 0.03
+      Alpha: 0.8
 
-    # RTAB-Map Optimized Path
     - Class: rviz_default_plugins/Path
-      Name: Map Path (RTAB-Map)
+      Name: RTAB-Map Path (Optimized)
       Enabled: true
       Topic:
         Value: /rtabmap/mapPath
-        Depth: 1
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
       Color: 0; 255; 0
       Line Style: Lines
       Line Width: 0.05
+      Alpha: 1.0
 
-    # Waypoint Markers
+    # ========== NAVIGATION ==========
+    
     - Class: rviz_default_plugins/MarkerArray
-      Name: Waypoints
+      Name: Goal Markers
       Enabled: true
       Topic:
         Value: /waypoint_markers
         Depth: 5
-      Queue Size: 100
-
-    # Waypoint Path
-    - Class: rviz_default_plugins/Path
-      Name: Waypoint Path
-      Enabled: true
-      Topic:
-        Value: /waypoint_path
-        Depth: 5
-      Color: 255; 255; 0
-      Line Style: Lines
-      Line Width: 0.08
-      Alpha: 0.8
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
 
   Tools:
     - Class: rviz_default_plugins/Interact
@@ -159,7 +172,11 @@ Visualization Manager:
       Class: rviz_default_plugins/TopDownOrtho
       Name: Top View
       Enable Stereo Rendering: false
-      Scale: 10.0
+      Scale: 8.0
       X: 0.0
       Y: 0.0
       Angle: 0.0
+
+Window Geometry:
+  Height: 900
+  Width: 1600
