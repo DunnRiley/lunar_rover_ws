@@ -69,13 +69,10 @@ class RealRoverLauncher(QWidget):
             'camera_rotation': '/dev/ttyUSB7'
         }
         
-        # Camera device configuration
-        # IFWATER camera typically shows up as the NEWEST video devices
-        # Based on your system scan, these are /dev/video32 and /dev/video33
-        self.camera_devices = {
-            'rear_left': '/dev/video32',   # Recently created (Jan 27 17:17)
-            'rear_right': '/dev/video33'   # Recently created (Jan 27 17:17)
-        }
+        # IFWATER Stereo Camera (single device, side-by-side)
+        # CHANGE THIS if your camera appears on a different device
+        # Common values: /dev/video6, /dev/video7, /dev/video32
+        self.stereo_camera_device = '/dev/video32'
 
         main_layout = QVBoxLayout()
 
@@ -103,13 +100,13 @@ class RealRoverLauncher(QWidget):
         
         # Camera device configuration
         camera_layout = QHBoxLayout()
-        camera_layout.addWidget(QLabel("Rear Camera Devices:"))
-        self.camera_config_btn = QPushButton("Configure Camera Devices")
-        self.camera_config_btn.clicked.connect(self.configure_cameras)
+        camera_layout.addWidget(QLabel("Stereo Camera:"))
+        self.camera_config_btn = QPushButton("Configure Camera Device")
+        self.camera_config_btn.clicked.connect(self.configure_camera)
         camera_layout.addWidget(self.camera_config_btn)
         config_layout.addLayout(camera_layout)
         
-        self.camera_display = QLabel(self._format_camera_config())
+        self.camera_display = QLabel(f"Device: {self.stereo_camera_device} (1600x600 side-by-side)")
         self.camera_display.setStyleSheet("color: #666; font-size: 10px;")
         config_layout.addWidget(self.camera_display)
         
@@ -239,14 +236,14 @@ ros2 launch realsense2_camera rs_launch.py \\
 cd ~/lunar_rover_ws
 
 echo "Starting IFWATER Stereo Camera..."
-echo "Device: /dev/video32 (1600x600 side-by-side)"
+echo "Device: {self.stereo_camera_device} (1600x600 side-by-side)"
 echo "Output: Left (800x600) + Right (800x600)"
 echo ""
 
 # Launch stereo camera publisher
 python3 stereo_camera_publisher.py \\
     --ros-args \\
-    -p device:=/dev/video32 \\
+    -p device:={self.stereo_camera_device} \\
     -p width:=1600 \\
     -p height:=600 \\
     -p fps:=30 \\
@@ -348,9 +345,9 @@ ros2 launch realsense2_camera rs_launch.py camera_name:=camera camera_namespace:
 """
 
     def get_rear_camera_command(self):
-        return """
+        return f"""
 cd ~/lunar_rover_ws
-python3 stereo_camera_publisher.py --ros-args -p device:=/dev/video32 -p width:=1600 -p height:=600 -p fps:=30
+python3 stereo_camera_publisher.py --ros-args -p device:={self.stereo_camera_device} -p width:=1600 -p height:=600 -p fps:=30
 """
 
     def get_rviz_command(self):
@@ -366,10 +363,6 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
                 f"BR: {self.motor_ports['back_right']} | BL: {self.motor_ports['back_left']} | "
                 f"ACT1: {self.motor_ports['actuator_1']} | ACT2: {self.motor_ports['actuator_2']} | "
                 f"CAM: {self.motor_ports['camera_rotation']}")
-    
-    def _format_camera_config(self):
-        """Format camera device configuration for display"""
-        return (f"Left: {self.camera_devices['rear_left']} | Right: {self.camera_devices['rear_right']}")
 
     def configure_ports(self):
         """Open port configuration dialog"""
@@ -397,25 +390,26 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
                 self.motor_ports[motor] = input_field.text()
             self.port_display.setText(self._format_port_config())
     
-    def configure_cameras(self):
+    def configure_camera(self):
         """Open camera device configuration dialog"""
         from PyQt5.QtWidgets import QDialog, QFormLayout, QDialogButtonBox, QLabel
         
         dialog = QDialog(self)
-        dialog.setWindowTitle("Configure IFWATER Stereo Camera Devices")
+        dialog.setWindowTitle("Configure IFWATER Stereo Camera")
         layout = QFormLayout()
         
-        info_label = QLabel("The IFWATER stereo camera appears as TWO video devices.\n"
-                           "Usually /dev/video2 (left) and /dev/video4 (right).\n"
-                           "Run 'ls /dev/video*' to find them.")
+        info_label = QLabel("The IFWATER stereo camera appears as ONE video device.\n"
+                           "Common devices: /dev/video6, /dev/video7, /dev/video32\n\n"
+                           "To find your camera:\n"
+                           "1. Unplug camera, run: ls /dev/video* > before.txt\n"
+                           "2. Plug in camera, run: ls /dev/video* > after.txt\n"
+                           "3. Compare: diff before.txt after.txt\n\n"
+                           "Or test with: ffplay /dev/videoX")
         info_label.setWordWrap(True)
         layout.addRow(info_label)
         
-        camera_inputs = {}
-        for camera, device in self.camera_devices.items():
-            input_field = QLineEdit(device)
-            layout.addRow(f"{camera.replace('_', ' ').title()}:", input_field)
-            camera_inputs[camera] = input_field
+        camera_input = QLineEdit(self.stereo_camera_device)
+        layout.addRow("Camera Device:", camera_input)
         
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
@@ -425,9 +419,8 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
         dialog.setLayout(layout)
         
         if dialog.exec_():
-            for camera, input_field in camera_inputs.items():
-                self.camera_devices[camera] = input_field.text()
-            self.camera_display.setText(self._format_camera_config())
+            self.stereo_camera_device = camera_input.text()
+            self.camera_display.setText(f"Device: {self.stereo_camera_device} (1600x600 side-by-side)")
 
     def create_control_block(self, name, label_text, command):
         """Create control group with start/stop buttons"""
