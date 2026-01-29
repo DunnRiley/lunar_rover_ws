@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../../../LunaboticsArduino"
+		},
+		{
+			"name": "lunar_robot_hardware",
+			"path": "."
+		}
+	],
+	"settings": {}
+}

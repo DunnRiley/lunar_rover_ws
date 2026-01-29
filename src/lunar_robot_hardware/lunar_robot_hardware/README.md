@@ -6,6 +6,8 @@ I want the controls loop template setup
 
 A basic pinout structure in place.
 
+To Run this off VScode download the platformio extension
+
 
 
 
