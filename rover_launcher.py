@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Real Rover Hardware Launch System
+Real Rover Hardware Launch System - UPDATED FOR IFWATER STEREO CAMERA
 - Proper camera transforms for D435 point cloud
-- Support for new IFWATER stereo camera
+- Support for IFWATER 3D Stereo USB Camera 1080P (replaces T265)
 - Simplified for real hardware only
 """
 
@@ -52,7 +52,7 @@ def run_in_terminal(command):
 class RealRoverLauncher(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Real Rover Control System")
+        self.setWindowTitle("Real Rover Control System - IFWATER Stereo Camera")
         self.setMinimumWidth(750)
 
         self.processes = {}
@@ -68,11 +68,16 @@ class RealRoverLauncher(QWidget):
             'actuator_2': '/dev/ttyUSB5',
             'camera_rotation': '/dev/ttyUSB7'
         }
+        
+        # IFWATER Stereo Camera (single device, side-by-side)
+        # CHANGE THIS if your camera appears on a different device
+        # Common values: /dev/video6, /dev/video7, /dev/video32
+        self.stereo_camera_device = '/dev/video32'
 
         main_layout = QVBoxLayout()
 
         # HEADER
-        header = QLabel("Rover Hardware Control")
+        header = QLabel("Rover Hardware Control - IFWATER Stereo Camera Edition")
         header.setFont(QFont("Arial", 18, QFont.Bold))
         header.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header)
@@ -92,6 +97,18 @@ class RealRoverLauncher(QWidget):
         self.port_display = QLabel(self._format_port_config())
         self.port_display.setStyleSheet("color: #666; font-size: 10px;")
         config_layout.addWidget(self.port_display)
+        
+        # Camera device configuration
+        camera_layout = QHBoxLayout()
+        camera_layout.addWidget(QLabel("Stereo Camera:"))
+        self.camera_config_btn = QPushButton("Configure Camera Device")
+        self.camera_config_btn.clicked.connect(self.configure_camera)
+        camera_layout.addWidget(self.camera_config_btn)
+        config_layout.addLayout(camera_layout)
+        
+        self.camera_display = QLabel(f"Device: {self.stereo_camera_device} (1600x600 side-by-side)")
+        self.camera_display.setStyleSheet("color: #666; font-size: 10px;")
+        config_layout.addWidget(self.camera_display)
         
         config_group.setLayout(config_layout)
         main_layout.addWidget(config_group)
@@ -165,7 +182,10 @@ sleep 1
 # Camera optical frame transforms (CRITICAL for point cloud)
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_depth_optical_frame &
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_color_optical_frame &
-ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_depth_optical_frame &
+
+# Stereo camera optical frames
+ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_left_optical_frame &
+ros2 run tf2_ros static_transform_publisher 0.06 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_right_optical_frame &
 
 # Wait for all processes
 wait $RSP_PID
@@ -208,23 +228,29 @@ ros2 launch realsense2_camera rs_launch.py \\
 """
         ))
 
-        # Rear camera (IFWATER Stereo)
+        # Rear camera (IFWATER Stereo) - Side-by-Side Single Device
         components_layout.addWidget(self.create_control_block(
             "rear_camera",
-            "Rear Camera (IFWATER Stereo - Depth + RGB)",
-            """
+            "Rear Camera (IFWATER Stereo 1600x600 → Split to 800x600 L+R)",
+            f"""
 cd ~/lunar_rover_ws
-source install/setup.bash
-# IFWATER camera launch - adjust device path as needed
-ros2 run usb_cam usb_cam_node_exe \\
+
+echo "Starting IFWATER Stereo Camera..."
+echo "Device: {self.stereo_camera_device} (1600x600 side-by-side)"
+echo "Output: Left (800x600) + Right (800x600)"
+echo ""
+
+# Launch stereo camera publisher
+python3 stereo_camera_publisher.py \\
     --ros-args \\
-    -p video_device:=/dev/video2 \\
-    -r __ns:=/camera_rear \\
-    -r __node:=camera_rear \\
-    -p image_width:=1280 \\
-    -p image_height:=720 \\
-    -p framerate:=30.0 \\
-    -p camera_frame_id:=camera_rear_color_optical_frame
+    -p device:={self.stereo_camera_device} \\
+    -p width:=1600 \\
+    -p height:=600 \\
+    -p fps:=30 \\
+    -p publish_rate:=30.0
+
+echo ""
+echo "Stereo camera publisher stopped"
 """
         ))
 
@@ -287,7 +313,8 @@ python3 teleop_keyboard.py
         """Launch camera test mode"""
         self.start_process("transforms", self.get_transforms_command())
         QTimer.singleShot(2000, lambda: self.start_process("front_camera", self.get_front_camera_command()))
-        QTimer.singleShot(3000, lambda: self.start_process("rviz", self.get_rviz_command()))
+        QTimer.singleShot(3000, lambda: self.start_process("rear_camera", self.get_rear_camera_command()))
+        QTimer.singleShot(4000, lambda: self.start_process("rviz", self.get_rviz_command()))
 
     def get_transforms_command(self):
         """Get the transforms command"""
@@ -298,7 +325,8 @@ ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_descrip
 sleep 1
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_depth_optical_frame &
 ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_link camera_color_optical_frame &
-ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_depth_optical_frame &
+ros2 run tf2_ros static_transform_publisher 0 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_left_optical_frame &
+ros2 run tf2_ros static_transform_publisher 0.06 0 0 -1.5707963267948966 0 -1.5707963267948966 camera_rear_link camera_rear_right_optical_frame &
 wait
 """
 
@@ -317,10 +345,9 @@ ros2 launch realsense2_camera rs_launch.py camera_name:=camera camera_namespace:
 """
 
     def get_rear_camera_command(self):
-        return """
+        return f"""
 cd ~/lunar_rover_ws
-source install/setup.bash
-ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video2 -r __ns:=/camera_rear -r __node:=camera_rear -p image_width:=1280 -p image_height:=720 -p framerate:=30.0 -p camera_frame_id:=camera_rear_depth_optical_frame
+python3 stereo_camera_publisher.py --ros-args -p device:={self.stereo_camera_device} -p width:=1600 -p height:=600 -p fps:=30
 """
 
     def get_rviz_command(self):
@@ -362,6 +389,38 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
             for motor, input_field in port_inputs.items():
                 self.motor_ports[motor] = input_field.text()
             self.port_display.setText(self._format_port_config())
+    
+    def configure_camera(self):
+        """Open camera device configuration dialog"""
+        from PyQt5.QtWidgets import QDialog, QFormLayout, QDialogButtonBox, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Configure IFWATER Stereo Camera")
+        layout = QFormLayout()
+        
+        info_label = QLabel("The IFWATER stereo camera appears as ONE video device.\n"
+                           "Common devices: /dev/video6, /dev/video7, /dev/video32\n\n"
+                           "To find your camera:\n"
+                           "1. Unplug camera, run: ls /dev/video* > before.txt\n"
+                           "2. Plug in camera, run: ls /dev/video* > after.txt\n"
+                           "3. Compare: diff before.txt after.txt\n\n"
+                           "Or test with: ffplay /dev/videoX")
+        info_label.setWordWrap(True)
+        layout.addRow(info_label)
+        
+        camera_input = QLineEdit(self.stereo_camera_device)
+        layout.addRow("Camera Device:", camera_input)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        
+        dialog.setLayout(layout)
+        
+        if dialog.exec_():
+            self.stereo_camera_device = camera_input.text()
+            self.camera_display.setText(f"Device: {self.stereo_camera_device} (1600x600 side-by-side)")
 
     def create_control_block(self, name, label_text, command):
         """Create control group with start/stop buttons"""
