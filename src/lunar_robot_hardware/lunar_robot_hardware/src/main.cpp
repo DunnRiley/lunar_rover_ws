@@ -59,6 +59,15 @@ const uint8_t BackLeftEncoder_CS = 32;
 
 const uint8_t Test = 13;
 
+const uint8_t START = 0xAA;
+const uint8_t END = 0x55;
+
+uint8_t data[2];
+uint8_t idx = 0;
+enum RxState { WAIT_START, READ_DATA, WAIT_END};
+RxState rxState = WAIT_START;
+bool receiving = false;
+
 //GPIO Extras
 
 // Extra
@@ -127,8 +136,9 @@ void setup() {
   pinMode(ActuatorEncoder2B, INPUT_PULLUP);
 
 // Engage COMs
-Serial.begin(115200);
+  Serial.begin(115200);
 // Setting a baud rate/transfer rate of 115200
+  
 
 
 
@@ -136,7 +146,31 @@ Serial.begin(115200);
 
 void loop() {
   // put your main code here, to run repeatedly:
+while (Serial.available() > 0) {
+  uint8_t b = (uint8_t)Serial.read();
 
+  switch (rxState) {
+    case WAIT_START:
+      if (b == START){
+        idx = 0;
+        rxState = READ_DATA;
+      }
+    case READ_DATA:
+      data[idx++] = b;
+      if (idx >= 2){
+        rxState = WAIT_END;
+      }
+    case WAIT_END:
+      if (b == END) {
+        Serial.write(0xAA);
+        HandleInput(data[0], (int8_t)data[1]);
+      }
+      rxState = WAIT_START;
+      break;
+
+  }
+
+}
 
 }
 
@@ -149,6 +183,11 @@ int MotorDriving() {
 
 
 int ActuatorMovement(){
+
+}
+
+int HandleInput(uint8_t device, int8_t speed){
+
 
 }
 
