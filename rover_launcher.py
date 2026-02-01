@@ -131,6 +131,13 @@ class RealRoverLauncher(QWidget):
         full_launch_btn.clicked.connect(self.launch_complete_system)
         quick_layout.addWidget(full_launch_btn)
         
+        # SLAM Navigation button
+        slam_nav_btn = QPushButton("Launch SLAM Navigation (Map Building + Nav)")
+        slam_nav_btn.setFont(QFont("Arial", 12))
+        slam_nav_btn.setStyleSheet("background-color: #FF9800; color: white; padding: 10px;")
+        slam_nav_btn.clicked.connect(self.launch_slam_navigation)
+        quick_layout.addWidget(slam_nav_btn)
+
         # Camera test button
         camera_test_btn = QPushButton("Launch Camera Test (No Motors)")
         camera_test_btn.setFont(QFont("Arial", 12))
@@ -276,6 +283,17 @@ source install/setup.bash
 ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz \\
     --ros-args -p use_sim_time:=false
 """
+        ))
+
+        # SLAM Navigation System (add this after the other components)
+        components_layout.addWidget(self.create_control_block(
+            "slam_navigation",
+            "SLAM Navigation System (Complete SLAM + Nav2)",
+            """
+        cd ~/lunar_rover_ws
+        source install/setup.bash
+        ros2 launch lunar_robot_hardware slam_navigation.launch.py
+        """
         ))
 
         # Teleop with actuators
@@ -477,6 +495,14 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
                     self.status_lights[name].set_color("green")
                 else:
                     self.status_lights[name].set_color("red")
+
+    def launch_slam_navigation(self):
+            """Launch complete SLAM navigation system"""
+            self.start_process("slam_navigation", """
+        cd ~/lunar_rover_ws
+        source install/setup.bash
+        ros2 launch lunar_robot_hardware slam_navigation.launch.py
+        """)
 
 
 if __name__ == '__main__':

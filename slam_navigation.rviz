@@ -1,0 +1,242 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Global Options:
+    Fixed Frame: odom  # Start with odom, switch to map once available
+    Background Color: 30; 30; 30
+
+  Displays:
+    # ========== MAP (Updates in Real-Time!) ==========
+    
+    - Class: rviz_default_plugins/Map
+      Name: SLAM Map (Real-Time)
+      Enabled: true
+      Topic:
+        Value: /map
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Update Topic:
+        Value: /map_updates
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Color Scheme: map
+      Alpha: 0.8
+      Draw Behind: true
+    
+    # ========== GRID ==========
+    
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Reference Frame: odom
+      Enabled: true
+      Cell Size: 1.0
+      Color: 160; 160; 164
+      Plane Cell Count: 40
+    
+    # ========== ROBOT ==========
+    
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot Model
+      Enabled: true
+      Description Topic:
+        Value: /robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+    
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Axes: true
+      Show Names: true
+      Marker Scale: 0.3
+      Frame Timeout: 15.0
+      Frames:
+        All Enabled: false
+        map:
+          Value: true
+        odom:
+          Value: true
+        base_link:
+          Value: true
+        base_footprint:
+          Value: true
+        camera_link:
+          Value: true
+        camera_depth_optical_frame:
+          Value: false
+    
+    # ========== SENSORS ==========
+    
+    - Class: rviz_default_plugins/LaserScan
+      Name: Laser Scan (2D)
+      Enabled: true
+      Topic:
+        Value: /scan
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Size (m): 0.08
+      Style: Points
+      Color: 255; 255; 0
+      Alpha: 1.0
+      Decay Time: 0
+    
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Point Cloud (3D)
+      Enabled: true
+      Topic:
+        Value: /camera/camera/depth/color/points
+        Depth: 2
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Size (m): 0.03
+      Style: Points
+      Color Transformer: RGB8
+      Decay Time: 0
+      Use Fixed Frame: true
+    
+    # ========== NAVIGATION ==========
+    
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap
+      Enabled: true
+      Topic:
+        Value: /global_costmap/costmap
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color Scheme: costmap
+      Alpha: 0.3
+      Draw Behind: false
+    
+    - Class: rviz_default_plugins/Map
+      Name: Local Costmap
+      Enabled: true
+      Topic:
+        Value: /local_costmap/costmap
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color Scheme: costmap
+      Alpha: 0.5
+      Draw Behind: false
+    
+    - Class: rviz_default_plugins/Path
+      Name: Global Plan
+      Enabled: true
+      Topic:
+        Value: /plan
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 85; 255; 127
+      Line Style: Lines
+      Line Width: 0.05
+      Alpha: 1.0
+
+    # ========== SLAM TOOLBOX ==========
+
+    ld.add_action(Node(
+        package='slam_toolbox',
+        executable='async_slam_toolbox_node',
+        name='slam_toolbox',
+        parameters=[
+            slam_params_file,
+            {'use_sim_time': use_sim_time}
+        ],
+        output='screen'
+    ))
+
+    # ADD THIS - Lifecycle Manager for SLAM Toolbox
+    ld.add_action(Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_slam',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'autostart': True,
+            'node_names': ['slam_toolbox']
+        }]
+    ))
+    
+    - Class: rviz_default_plugins/Path
+      Name: Local Plan
+      Enabled: true
+      Topic:
+        Value: /local_plan
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 255; 170; 0
+      Line Style: Lines
+      Line Width: 0.03
+      Alpha: 0.8
+    
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Waypoint Markers
+      Enabled: true
+      Topic:
+        Value: /waypoint_markers
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+    
+    - Class: rviz_default_plugins/Path
+      Name: Waypoint Path
+      Enabled: true
+      Topic:
+        Value: /waypoint_path
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 0; 200; 255
+      Line Style: Lines
+      Line Width: 0.04
+      Alpha: 0.8
+
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic: /initialpose
+    - Class: nav2_rviz_plugins/GoalTool
+    - Class: rviz_default_plugins/PublishPoint
+      Topic: /clicked_point
+
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Top View
+      Enable Stereo Rendering: false
+      Scale: 20.0
+      X: 0.0
+      Y: 0.0
+      Angle: 0.0
+
+Window Geometry:
+  Height: 1080
+  Width: 1920
+  Displays:
+    collapsed: false
+  Views:
+    collapsed: false

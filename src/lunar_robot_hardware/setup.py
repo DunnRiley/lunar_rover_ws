@@ -10,21 +10,22 @@ setup(
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name + '.txt']),
+            ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml') if os.path.exists('config') else []),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='Your Name',
-    maintainer_email='your.email@example.com',
+    maintainer='Riley Dunn',
+    maintainer_email='riley@example.com',
     description='Real hardware bridge for lunar rover',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'motor_controller_node = lunar_robot_hardware.motor_controller:main',
+            'simple_odom_publisher = lunar_robot_hardware.simple_odom:main',
         ],
     },
 )

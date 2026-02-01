@@ -1,2 +1,3 @@
 [console_scripts]
 motor_controller_node = lunar_robot_hardware.motor_controller:main
+simple_odom_publisher = lunar_robot_hardware.simple_odom:main

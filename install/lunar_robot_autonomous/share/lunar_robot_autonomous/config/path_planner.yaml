@@ -1,11 +1,1 @@
-pointcloud_path_planner:
-  ros__parameters:
-    grid_resolution: 0.1           # meters per grid cell
-    planning_range: 10.0           # meters - how far ahead to plan
-    obstacle_height_threshold: 0.15  # meters - what counts as obstacle
-    max_slope: 0.5                 # radians (~28 degrees)
-    robot_radius: 0.35             # meters - safety buffer
-    forward_speed: 0.5             # m/s
-    turn_speed: 0.8                # rad/s
-    goal_tolerance: 0.3            # meters - when goal is "reached"
-    replan_rate: 2.0               # Hz - replanning frequency
+/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/config/path_planner.yaml

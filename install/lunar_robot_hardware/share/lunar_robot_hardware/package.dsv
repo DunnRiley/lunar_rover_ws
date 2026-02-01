@@ -1,12 +1,6 @@
-source;share/lunar_robot_hardware/hook/path.ps1
-source;share/lunar_robot_hardware/hook/path.dsv
-source;share/lunar_robot_hardware/hook/path.sh
 source;share/lunar_robot_hardware/hook/pythonpath.ps1
 source;share/lunar_robot_hardware/hook/pythonpath.dsv
 source;share/lunar_robot_hardware/hook/pythonpath.sh
-source;share/lunar_robot_hardware/hook/pythonscriptspath.ps1
-source;share/lunar_robot_hardware/hook/pythonscriptspath.dsv
-source;share/lunar_robot_hardware/hook/pythonscriptspath.sh
 source;share/lunar_robot_hardware/hook/ament_prefix_path.ps1
 source;share/lunar_robot_hardware/hook/ament_prefix_path.dsv
 source;share/lunar_robot_hardware/hook/ament_prefix_path.sh

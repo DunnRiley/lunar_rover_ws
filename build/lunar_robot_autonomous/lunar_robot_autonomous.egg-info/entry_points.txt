@@ -1,3 +1,4 @@
 [console_scripts]
 multi_waypoint_navigator = lunar_robot_autonomous.multi_waypoint_navigator:main
 unified_navigator = lunar_robot_autonomous.unified_navigator:main
+waypoint_navigator = lunar_robot_autonomous.waypoint_navigator:main

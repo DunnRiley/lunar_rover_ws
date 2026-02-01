@@ -1,8 +1,1 @@
-simple_obstacle_avoidance:
-  ros__parameters:
-    forward_speed: 0.5          # m/s
-    turn_speed: 0.3             # rad/s
-    obstacle_distance: 2.0      # meters - detection range
-    robot_width: 0.6            # meters - safety clearance
-    scan_height_min: -0.2       # meters - ignore ground
-    scan_height_max: 0.5        # meters - obstacle height range
+/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/config/obstical_avoidance.yaml

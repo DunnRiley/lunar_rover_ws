@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'unified_navigator = lunar_robot_autonomous.unified_navigator:main',
             'multi_waypoint_navigator = lunar_robot_autonomous.multi_waypoint_navigator:main',
+            'waypoint_navigator = lunar_robot_autonomous.waypoint_navigator:main',
         ],
     },
 )
