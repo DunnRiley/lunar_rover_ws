@@ -9,7 +9,7 @@
 // BR wheel 0x04
 // ACTUATORS 0x08
 // Servo1 0x10
-//Servo2 0x11
+// Servo2 0x11
 
 
 
@@ -129,10 +129,60 @@ void setup() {
 // Engage COMs
 Serial.begin(115200);
 // Setting a baud rate/transfer rate of 115200
+}
+
+void driveMotor(uint8_t pwmPin, uint8_t dirPin, int8_t speed) {
+    // speed is signed: -127 to +127
+    if (speed >= 0) {
+        digitalWrite(dirPin, HIGH);
+        analogWrite(pwmPin, speed);
+    } else {
+        digitalWrite(dirPin, LOW);
+        analogWrite(pwmPin, -speed);
+    }
+}
 
 
+
+
+
+// Rotate in place
+void RIP(dir) {
+  driveMotor(FrontLeftPWM, FrontLeftDIR, dir); 
+  driveMotor(BackLeftPWM, BackLeftDIR, dir); 
+  driveMotor(FrontRightPWM, FrontRightDIR, -dir); 
+  driveMotor(BackRightPWM, BackRightDIR, -dir);
+}
+
+void Turn(dir, angle) {
+  if (angle == 1) {
+    driveMotor(FrontLeftPWM, FrontLeftDIR, dir); 
+    driveMotor(BackLeftPWM, BackLeftDIR, dir); 
+    driveMotor(FrontRightPWM, FrontRightDIR, 0); 
+    driveMotor(BackRightPWM, BackRightDIR, 0);
+  } else {
+    driveMotor(FrontLeftPWM, FrontLeftDIR, 0); 
+    driveMotor(BackLeftPWM, BackLeftDIR, 0); 
+    driveMotor(FrontRightPWM, FrontRightDIR, dir); 
+    driveMotor(BackRightPWM, BackRightDIR, dir);
+  }
 
 }
+
+void Move(dir) {
+  driveMotor(FrontLeftPWM, FrontLeftDIR, dir); 
+  driveMotor(BackLeftPWM, BackLeftDIR, dir); 
+  driveMotor(FrontRightPWM, FrontRightDIR, dir); 
+  driveMotor(BackRightPWM, BackRightDIR, dir);
+}
+
+void Stop() {
+  driveMotor(FrontLeftPWM, FrontLeftDIR, 0); 
+  driveMotor(BackLeftPWM, BackLeftDIR, 0); 
+  driveMotor(FrontRightPWM, FrontRightDIR, 0); 
+  driveMotor(BackRightPWM, BackRightDIR, 0);
+}
+
 
 void loop() {
   // put your main code here, to run repeatedly:
