@@ -31,7 +31,8 @@ Visualization Manager:
       Frames:
         All Enabled: true
 
-    # ========== CAMERA RGB IMAGE ==========
+    # ========== CAMERA IMAGES ==========
+    
     - Class: rviz_default_plugins/Image
       Name: "Camera RGB"
       Enabled: true
@@ -45,9 +46,23 @@ Visualization Manager:
       Transport: raw
       Normalize Range: true
 
-    # ========== POINT CLOUD (from D435) ==========
+    - Class: rviz_default_plugins/Image
+      Name: "Camera Depth"
+      Enabled: false
+      Topic:
+        Value: /camera/camera/aligned_depth_to_color/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Queue Size: 1
+      Transport: raw
+      Normalize Range: true
+
+    # ========== LIVE POINT CLOUD ==========
+    
     - Class: rviz_default_plugins/PointCloud2
-      Name: "D435 Point Cloud"
+      Name: "Live Camera Point Cloud"
       Enabled: true
       Topic:
         Value: /camera/camera/depth/color/points
@@ -62,43 +77,68 @@ Visualization Manager:
       Use Fixed Frame: true
       Decay Time: 0.0
 
-    # ========== LASER SCAN (from depth conversion) ==========
-    - Class: rviz_default_plugins/LaserScan
-      Name: "Laser Scan (for SLAM)"
+    # ========== RTAB-MAP OUTPUTS ==========
+    
+    - Class: rviz_default_plugins/PointCloud2
+      Name: "RTAB-Map Cloud (Persistent)"
       Enabled: true
       Topic:
-        Value: /scan
+        Value: /rtabmap/cloud_map
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Best Effort
-      Size (m): 0.05
+        Reliability Policy: Reliable
+      Queue Size: 1
+      Size (m): 0.02
       Style: Points
-      Color: 255; 255; 0
-      Alpha: 1.0
-      Decay Time: 0
+      Color Transformer: RGB8
+      Use Fixed Frame: true
+      Decay Time: 0.0
+      Alpha: 0.8
 
-    # ========== SLAM MAP ==========
     - Class: rviz_default_plugins/Map
-      Name: SLAM Map
+      Name: "RTAB-Map Grid (for Navigation)"
       Enabled: true
       Topic:
-        Value: /map
-        Depth: 1
-        Durability Policy: Transient Local
+        Value: /rtabmap/grid_map
+        Depth: 5
+        Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
       Color Scheme: map
       Alpha: 0.7
-      Draw Behind: true
-      Update Topic:
-        Value: /map_updates
-        Depth: 10
+      Draw Behind: false
+
+    - Class: rviz_default_plugins/Path
+      Name: "Odometry Path"
+      Enabled: true
+      Topic:
+        Value: /rtabmap/odom_path
+        Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Best Effort
+        Reliability Policy: Reliable
+      Color: 255; 150; 0
+      Line Style: Lines
+      Line Width: 0.03
+      Alpha: 0.8
 
-    # ========== ODOMETRY PATH ==========
+    - Class: rviz_default_plugins/Path
+      Name: "RTAB-Map Path (Optimized)"
+      Enabled: true
+      Topic:
+        Value: /rtabmap/mapPath
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Color: 0; 255; 0
+      Line Style: Lines
+      Line Width: 0.05
+      Alpha: 1.0
+
+    # ========== ODOMETRY ==========
+    
     - Class: rviz_default_plugins/Odometry
       Name: Odometry
       Enabled: true
@@ -152,13 +192,22 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz_default_plugins/TopDownOrtho
-      Name: Top View
+      Class: rviz_default_plugins/Orbit
+      Distance: 5.0
       Enable Stereo Rendering: false
-      Scale: 10.0
-      X: 0.0
-      Y: 0.0
-      Angle: 0.0
+      Focal Point:
+        X: 1.0
+        Y: 0.0
+        Z: 0.0
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.5
+      Target Frame: base_link
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 0.0
     Saved: ~
 
   Global Options:

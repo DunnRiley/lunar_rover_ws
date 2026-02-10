@@ -1,45 +1,20 @@
 #!/usr/bin/env python3
 """
-SLAM Navigation Launch - Complete System for ROS2 Jazzy
-- SLAM Toolbox for persistent mapping
-- Nav2 for navigation (launching nodes directly)
-- Depthimage to Laserscan for 2D SLAM from D435
-- Multi-waypoint support
+FIXED SLAM Navigation Launch
+- Proper startup sequence to avoid TF errors
+- SLAM Toolbox for 2D mapping
+- Works with D435 camera point cloud
 """
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare
+from launch.actions import TimerAction
 import os
 
 
 def generate_launch_description():
-    # Launch arguments
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-    autostart = LaunchConfiguration('autostart', default='true')
     
-    # Get package directory
-    pkg_hardware = FindPackageShare('lunar_robot_hardware')
-    
-    # Config file paths
-    slam_params_file = PathJoinSubstitution([
-        pkg_hardware, 'config', 'slam_toolbox_params.yaml'
-    ])
-    
-    nav2_params_file = PathJoinSubstitution([
-        pkg_hardware, 'config', 'nav2_params.yaml'
-    ])
-    
-    # RViz config path
-    rviz_config_file = os.path.join(
-        os.path.expanduser('~'),
-        'lunar_rover_ws',
-        'slam_navigation.rviz'
-    )
-    
-    # Minimal robot URDF with base_footprint for Nav2
+    # Robot URDF with complete frame tree
     robot_urdf = """<?xml version="1.0"?>
 <robot name="lunar_rover">
   <link name="base_footprint"/>
@@ -64,239 +39,159 @@ def generate_launch_description():
 </robot>
 """
     
-    # Lifecycle node manager names
-    lifecycle_nodes = [
-        'controller_server',
-        'planner_server',
-        'behavior_server',
-        'bt_navigator',
-        'waypoint_follower',
-        'velocity_smoother'
-    ]
+    # SLAM parameters
+    slam_params = {
+        'use_sim_time': False,
+        'odom_frame': 'odom',
+        'map_frame': 'map',
+        'base_frame': 'base_footprint',
+        'scan_topic': '/scan',
+        'mode': 'mapping',
+        'map_update_interval': 1.0,
+        'resolution': 0.05,
+        'max_laser_range': 8.0,
+        'minimum_travel_distance': 0.1,
+        'minimum_travel_heading': 0.1,
+        'transform_publish_period': 0.02,
+        'do_loop_closing': True,
+        'loop_search_maximum_distance': 3.0,
+        'transform_timeout': 0.5,
+    }
     
-    # Build launch description
-    ld = LaunchDescription()
+    rviz_config = os.path.join(
+        os.path.expanduser('~'),
+        'lunar_rover_ws',
+        'slam_navigation.rviz'
+    )
     
-    # Launch arguments
-    ld.add_action(DeclareLaunchArgument('use_sim_time', default_value='false'))
-    ld.add_action(DeclareLaunchArgument('autostart', default_value='true'))
-    
-    # ========== TF TREE ==========
-    
-    ld.add_action(Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        parameters=[{
-            'robot_description': robot_urdf,
-            'use_sim_time': use_sim_time
-        }],
-        output='screen'
-    ))
-    
-    # Camera optical frame transforms
-    ld.add_action(Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='camera_depth_optical_tf',
-        arguments=[
-            '0', '0', '0',
-            '-1.5707963267948966', '0', '-1.5707963267948966',
-            'camera_link', 'camera_depth_optical_frame'
-        ]
-    ))
-    
-    ld.add_action(Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='camera_color_optical_tf',
-        arguments=[
-            '0', '0', '0',
-            '-1.5707963267948966', '0', '-1.5707963267948966',
-            'camera_link', 'camera_color_optical_frame'
-        ]
-    ))
-    
-    # ========== CAMERAS ==========
-    
-    # Front D435 Camera
-    ld.add_action(Node(
-        package='realsense2_camera',
-        executable='realsense2_camera_node',
-        name='camera',
-        namespace='camera',
-        parameters=[{
-            'camera_name': 'camera',
-            'enable_color': True,
-            'enable_depth': True,
-            'enable_infra1': False,
-            'enable_infra2': False,
-            'align_depth.enable': True,
-            'enable_sync': True,
-            'depth_module.profile': '640x480x15',
-            'rgb_camera.profile': '640x480x15',
-            'pointcloud.enable': True,
-            'use_sim_time': use_sim_time,
-            'reconnect_timeout': 6.0, 
-            'wait_for_device_timeout': 10.0,  
-        }],
-        respawn=True,  
-        respawn_delay=2.0,  
-        output='screen'
-    ))
-
-    # ========== DEPTH TO LASERSCAN ==========
-    
-    ld.add_action(Node(
-        package='depthimage_to_laserscan',
-        executable='depthimage_to_laserscan_node',
-        name='depthimage_to_laserscan',
-        parameters=[{
-            'use_sim_time': use_sim_time,
-            'scan_height': 10,
-            'range_min': 0.3,
-            'range_max': 8.0,
-            'output_frame': 'camera_depth_optical_frame',
-        }],
-        remappings=[
-            ('depth', '/camera/camera/aligned_depth_to_color/image_raw'),
-            ('depth_camera_info', '/camera/camera/aligned_depth_to_color/camera_info'),
-            ('scan', '/scan'),
-        ],
-        output='screen'
-    ))
-    
-    # ========== SLAM TOOLBOX ==========
-    
-    ld.add_action(Node(
-        package='slam_toolbox',
-        executable='async_slam_toolbox_node',
-        name='slam_toolbox',
-        parameters=[
-            slam_params_file,
-            {'use_sim_time': use_sim_time}
-        ],
-        output='screen'
-    ))
-    
-    # ========== NAV2 STACK ==========
-    
-    # Controller Server
-    ld.add_action(Node(
-        package='nav2_controller',
-        executable='controller_server',
-        name='controller_server',
-        output='screen',
-        parameters=[nav2_params_file],
-        remappings=[
-            ('cmd_vel', '/cmd_vel'),
-            ('odom', '/odom')
-        ]
-    ))
-    
-    # Planner Server
-    ld.add_action(Node(
-        package='nav2_planner',
-        executable='planner_server',
-        name='planner_server',
-        output='screen',
-        parameters=[nav2_params_file]
-    ))
-    
-    # Behavior Server
-    ld.add_action(Node(
-        package='nav2_behaviors',
-        executable='behavior_server',
-        name='behavior_server',
-        output='screen',
-        parameters=[nav2_params_file]
-    ))
-    
-    # BT Navigator
-    ld.add_action(Node(
-        package='nav2_bt_navigator',
-        executable='bt_navigator',
-        name='bt_navigator',
-        output='screen',
-        parameters=[nav2_params_file]
-    ))
-    
-    # Waypoint Follower
-    ld.add_action(Node(
-        package='nav2_waypoint_follower',
-        executable='waypoint_follower',
-        name='waypoint_follower',
-        output='screen',
-        parameters=[nav2_params_file]
-    ))
-    
-    # Velocity Smoother
-    ld.add_action(Node(
-        package='nav2_velocity_smoother',
-        executable='velocity_smoother',
-        name='velocity_smoother',
-        output='screen',
-        parameters=[nav2_params_file],
-        remappings=[
-            ('cmd_vel', 'cmd_vel_nav'),
-            ('cmd_vel_smoothed', 'cmd_vel')
-        ]
-    ))
-    
-    # Lifecycle Manager
-    ld.add_action(Node(
-        package='nav2_lifecycle_manager',
-        executable='lifecycle_manager',
-        name='lifecycle_manager_navigation',
-        output='screen',
-        parameters=[{
-            'use_sim_time': use_sim_time,
-            'autostart': autostart,
-            'node_names': lifecycle_nodes
-        }]
-    ))
-    
-    # ========== WAYPOINT NAVIGATOR ==========
-    
-    ld.add_action(Node(
-        package='lunar_robot_autonomous',
-        executable='waypoint_navigator',
-        name='waypoint_navigator',
-        parameters=[{
-            'use_sim_time': use_sim_time,
-        }],
-        output='screen'
-    ))
-
-    # ========== ODOMETRY ==========
-
-    ld.add_action(Node(
-        package='lunar_robot_hardware',
-        executable='simple_odom_publisher',
-        name='simple_odom_publisher',
-        output='screen'
-    ))
-    
-    # ========== RVIZ ==========
-    # Only launch if config file exists
-    
-    if os.path.exists(rviz_config_file):
-        ld.add_action(Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            arguments=['-d', rviz_config_file],
-            parameters=[{'use_sim_time': use_sim_time}],
+    return LaunchDescription([
+        
+        # === STEP 1: TF Tree (immediate) ===
+        
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
+            parameters=[{
+                'robot_description': robot_urdf,
+                'use_sim_time': False
+            }],
             output='screen'
-        ))
-    else:
-        # Launch RViz without config
-        ld.add_action(Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            parameters=[{'use_sim_time': use_sim_time}],
+        ),
+        
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='camera_depth_optical_tf',
+            arguments=[
+                '0', '0', '0',
+                '-1.5707963267948966', '0', '-1.5707963267948966',
+                'camera_link', 'camera_depth_optical_frame'
+            ]
+        ),
+        
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='camera_color_optical_tf',
+            arguments=[
+                '0', '0', '0',
+                '-1.5707963267948966', '0', '-1.5707963267948966',
+                'camera_link', 'camera_color_optical_frame'
+            ]
+        ),
+        
+        # === STEP 2: Odometry (immediate) ===
+        
+        Node(
+            package='lunar_robot_hardware',
+            executable='simple_odom_publisher',
+            name='simple_odom_publisher',
             output='screen'
-        ))
-    
-    return ld
+        ),
+        
+        # === STEP 3: Camera (wait 2s for TF) ===
+        
+        TimerAction(
+            period=2.0,
+            actions=[
+                Node(
+                    package='realsense2_camera',
+                    executable='realsense2_camera_node',
+                    name='camera',
+                    namespace='camera',
+                    parameters=[{
+                        'camera_name': 'camera',
+                        'enable_color': True,
+                        'enable_depth': True,
+                        'enable_infra1': False,
+                        'enable_infra2': False,
+                        'align_depth.enable': True,
+                        'enable_sync': True,
+                        'depth_module.profile': '640x480x30',
+                        'rgb_camera.profile': '640x480x30',
+                        'pointcloud.enable': True,
+                        'use_sim_time': False,
+                    }],
+                    output='screen'
+                )
+            ]
+        ),
+        
+        # === STEP 4: Depth to LaserScan (wait 5s for camera) ===
+        
+        TimerAction(
+            period=5.0,
+            actions=[
+                Node(
+                    package='depthimage_to_laserscan',
+                    executable='depthimage_to_laserscan_node',
+                    name='depthimage_to_laserscan',
+                    parameters=[{
+                        'use_sim_time': False,
+                        'scan_height': 10,
+                        'range_min': 0.3,
+                        'range_max': 8.0,
+                        'output_frame': 'camera_depth_optical_frame',
+                    }],
+                    remappings=[
+                        ('depth', '/camera/camera/aligned_depth_to_color/image_raw'),
+                        ('depth_camera_info', '/camera/camera/aligned_depth_to_color/camera_info'),
+                        ('scan', '/scan'),
+                    ],
+                    output='screen'
+                )
+            ]
+        ),
+        
+        # === STEP 5: SLAM Toolbox (wait 8s for scan data) ===
+        
+        TimerAction(
+            period=8.0,
+            actions=[
+                Node(
+                    package='slam_toolbox',
+                    executable='async_slam_toolbox_node',
+                    name='slam_toolbox',
+                    parameters=[slam_params],
+                    output='screen'
+                )
+            ]
+        ),
+        
+        # === STEP 6: RViz (wait 10s for map frame) ===
+        
+        TimerAction(
+            period=10.0,
+            actions=[
+                Node(
+                    package='rviz2',
+                    executable='rviz2',
+                    name='rviz2',
+                    arguments=['-d', rviz_config] if os.path.exists(rviz_config) else [],
+                    parameters=[{'use_sim_time': False}],
+                    output='screen'
+                )
+            ]
+        ),
+    ])
