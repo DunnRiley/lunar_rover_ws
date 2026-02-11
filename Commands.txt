@@ -16,3 +16,31 @@ network:
 
 sudo netplan apply
 
+moonpie@minipc:~/lunar_rover_ws$ ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host noprefixroute 
+       valid_lft forever preferred_lft forever
+2: eno1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN group default qlen 1000
+    link/ether 1c:69:7a:0b:ed:98 brd ff:ff:ff:ff:ff:ff
+    altname enp0s31f6
+3: wlp0s20f3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 38:00:25:43:d9:0b brd ff:ff:ff:ff:ff:ff
+    inet 192.168.4.103/22 brd 192.168.7.255 scope global dynamic noprefixroute wlp0s20f3
+       valid_lft 14165sec preferred_lft 14165sec
+    inet6 fdab:70ae:2f74:1:8b49:1183:d8e2:eed1/64 scope global temporary dynamic 
+       valid_lft 604566sec preferred_lft 86054sec
+    inet6 fdab:70ae:2f74:1:1bea:a675:2dfd:3b35/64 scope global dynamic mngtmpaddr noprefixroute 
+       valid_lft 2591845sec preferred_lft 604645sec
+    inet6 fe80::4cbb:68f1:9c9:1234/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+4: tailscale0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1280 qdisc fq_codel state UNKNOWN group default qlen 500
+    link/none 
+    inet 100.93.241.14/32 scope global tailscale0
+       valid_lft forever preferred_lft forever
+    inet6 fd7a:115c:a1e0::d938:f10e/128 scope global 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::68c4:10b8:78c1:c980/64 scope link stable-privacy 
+       valid_lft forever preferred_lft forever
