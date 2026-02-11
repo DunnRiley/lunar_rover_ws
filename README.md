@@ -1,6 +1,12 @@
 ## lunar_rover_ws
-# How to run:
+# Connect to moonpie MiniPC
+// MiniPC is named moonpie and has a static IP of 138.67.181.222
+// run on laptop
+ssh moonpie@138.67.181.222
 
+// note all code is on the MiniPC and both computers have to be on the same Wifi
+
+# How to run:
 cd ~/lunar_rover_ws
 colcon build 
 source install/setup.bash
@@ -9,52 +15,18 @@ source install/setup.bash
 python3 rover_launcher.py
 
 # Test motors individualy 
+// need to update to use new hardware and an Arduino
 cd DiagnosticAndTesting
 python3 single_motor_test.py
 
 # Test drive chain and actuators 
+// need to update to use new hardware and an Arduino
 cd DiagnosticAndTesting
 python3 test_drive.py
 
 # Test Camera
-ros2 launch realsense_camera rs_launch.py
-ros2 run rviz2 rviz2
-
-# or
 cd DiagnosticAndTesting
 bash test_camera_transforms.sh
-
-# or 
-// not tested
-bash rtabmap_with_navigation.sh
-
-//////////////////////////////////////////////////////////////////////////
-test_drive works. Have not tested OOP for driving and actuators. In the prosses of adding arduino and encoders
-
-When runnig test_camera_transforms.sh and rover_launcher.py (Launch Cameras Test) I can get point cloud. 
-RTAB-Map and SLAM currently do not work. 
-
-//////////////////////////////////////////////////////////////////////////
-cd ~/lunar_rover_ws
-colcon build
-source install/setup.bash
-
-# Hardware
-ros2 run lunar_robot_hardware motor_controller_node
-
-# Camera 
-# Step 1: Fix USB stability (run once per boot)
-cd ~/lunar_rover_ws
-chmod +x fix_camera_usb.sh
-sudo ./fix_camera_usb.sh
-
-# Step 2 Launch 
-ros2 launch realsense2_camera rs_launch.py
-
-ros2 run tf2_ros tf2_echo base_link camera_depth_optical_frame
-
-# Navigation: point and click with slam
-ros2 launch lunar_robot_hardware simple_slam_nav.launch.py
 
 # Teleop 
 python3 teleop_keyboard.py
