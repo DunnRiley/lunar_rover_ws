@@ -1,9 +1,3 @@
-moonpie@minipc:~$ sudo netplan try
-
-** (process:52039): WARNING **: 16:11:47.906: Permissions for /etc/netplan/01-netcfg.yaml are too open. Netplan configuration should NOT be accessible by others.
-
-** (process:52039): WARNING **: 16:11:47.906: `gateway4` has been deprecated, use default routes instead.
-See the 'Default routes' section of the documentation for more details.
-Error in network definition: wlp0s20f3: No access points defined
-moonpie@minipc:~$ ip a | grep 192.168.0
-    inet 192.168.0.44/24 brd 192.168.0.255 scope global dynamic noprefixroute wlp0s20f3
+sudo nmcli connection modify "15835 W 12th 1" ipv4.method manual ipv4.addresses 192.168.0.102/24 ipv4.gateway 192.168.0.1 ipv4.dns "8.8.8.8 1.1.1.1"
+sudo nmcli connection down "15835 W 12th 1"
+sudo nmcli connection up "15835 W 12th 1"
