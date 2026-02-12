@@ -1,3 +1,24 @@
+moonpie@minipc:~$ ls /etc/netplan/
+01-netcfg.yaml
+01-network-manager-all.yaml.dpkg-backup
+90-NM-069b2a46-6667-490b-9fd1-6c8631e1ee57.yaml
+90-NM-17acd23c-b9e8-405a-80bb-b9be3b8f9a80.yaml
+90-NM-1fb7b07a-0e97-44c8-979b-aa5874d3444d.yaml
+90-NM-2e3d5b82-dcba-456f-a387-7b00a70d31c8.yaml
+90-NM-2e876b2e-49bf-43cd-af56-2ee07fdc35d9.yaml
+90-NM-30ff74ef-203a-4028-a615-2c4740973628.yaml
+90-NM-4e84613d-a4f8-4eab-ae36-f23270448fc1.yaml
+90-NM-5838cdd0-0997-491a-bd07-f6fa889bf4a4.yaml
+90-NM-7432c56b-fdf2-3155-8b7d-51e6bce433d0.yaml
+90-NM-87c789c2-15ab-457b-ad79-a2458a7494ba.yaml
+90-NM-af663c24-343f-4d93-8ae0-c15e56c4a10a.yaml
+90-NM-bb582a07-0cbf-4518-a48b-46c48679e1a5.yaml
+90-NM-be3733e6-b00b-4e49-8fad-79bc166a7ab8.yaml
+90-NM-bf34e73d-0c1b-4454-b567-77540ebc17cb.yaml
+90-NM-df484c11-11d5-4b80-a107-ac62496b8449.yaml
+90-NM-e0a65f30-4e32-4e1b-8aa9-ad6ebe20e0d9.yaml
+90-NM-fe7e9642-9cb8-404d-bddd-e8dd930804d8.yaml
+moonpie@minipc:~$ cat /etc/netplan/01-netcfg.yaml 
 network:
   version: 2
   renderer: NetworkManager
@@ -9,3 +30,7 @@ network:
       gateway4: 192.168.0.1
       nameservers:
         addresses: [8.8.8.8, 1.1.1.1]
+moonpie@minipc:~$ ip route
+default via 192.168.0.1 dev wlp0s20f3 proto dhcp src 192.168.0.44 metric 600 
+192.168.0.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.0.44 metric 600 
+moonpie@minipc
