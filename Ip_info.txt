@@ -29,3 +29,4 @@ moonpie@minipc:~$ ip a
 moonpie@minipc:~$ ip route
 default via 192.168.0.1 dev wlp0s20f3 proto static metric 20600 
 192.168.0.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.0.102 metric 600 
+
