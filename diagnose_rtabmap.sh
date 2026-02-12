@@ -26,7 +26,8 @@ echo "2. Camera Topics:"
 echo "----------------------------------------------------------------------"
 if ros2 topic list 2>/dev/null | grep -q "/camera/camera/color/image_raw"; then
     echo "  ✓ RGB image: /camera/camera/color/image_raw"
-    echo "    Rate: $(ros2 topic hz /camera/camera/color/image_raw --window 10 2>&1 | grep 'average rate' || echo 'checking...')"
+    RATE=$(timeout 3 ros2 topic hz /camera/camera/color/image_raw --window 5 2>&1 | grep 'average rate' || echo "    (rate check timed out)")
+    echo "    $RATE"
 else
     echo "  ❌ RGB image not publishing"
 fi
@@ -39,7 +40,8 @@ fi
 
 if ros2 topic list 2>/dev/null | grep -q "/camera/camera/depth/color/points"; then
     echo "  ✓ Live point cloud: /camera/camera/depth/color/points"
-    echo "    Rate: $(ros2 topic hz /camera/camera/depth/color/points --window 10 2>&1 | grep 'average rate' || echo 'checking...')"
+    RATE=$(timeout 3 ros2 topic hz /camera/camera/depth/color/points --window 5 2>&1 | grep 'average rate' || echo "    (rate check timed out)")
+    echo "    $RATE"
 else
     echo "  ❌ Live point cloud not publishing"
 fi
@@ -49,7 +51,22 @@ echo "3. Odometry:"
 echo "----------------------------------------------------------------------"
 if ros2 topic list 2>/dev/null | grep -q "/odom"; then
     echo "  ✓ Odometry: /odom"
-    echo "    Rate: $(ros2 topic hz /odom --window 10 2>&1 | grep 'average rate' || echo 'checking...')"
+    RATE=$(timeout 3 ros2 topic hz /odom --window 5 2>&1 | grep 'average rate' || echo "    (rate check timed out)")
+    echo "    $RATE"
+    
+    # Check if publishing TF
+    echo ""
+    echo "  Checking if odometry publishes TF..."
+    if timeout 2 ros2 topic echo /tf --once 2>/dev/null | grep -q "child_frame_id: \"base_link\""; then
+        echo "  ✓ Odometry IS publishing TF (odom → base_link)"
+    else
+        echo "  ❌ Odometry NOT publishing TF!"
+        echo "  This is why RViz can't transform point cloud!"
+        echo ""
+        echo "  Odometry node parameters:"
+        ros2 param list /rgbd_odometry 2>/dev/null | grep publish_tf
+        ros2 param get /rgbd_odometry publish_tf 2>/dev/null
+    fi
 else
     echo "  ❌ Odometry not publishing"
 fi

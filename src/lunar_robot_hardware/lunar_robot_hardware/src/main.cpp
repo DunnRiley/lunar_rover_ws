@@ -147,15 +147,15 @@ void driveMotor(uint8_t pwmPin, uint8_t dirPin, int8_t speed) {
 
 
 // Rotate in place
-void RIP(dir) {
+void RIP(int8_t dir) {
   driveMotor(FrontLeftPWM, FrontLeftDIR, dir); 
   driveMotor(BackLeftPWM, BackLeftDIR, dir); 
   driveMotor(FrontRightPWM, FrontRightDIR, -dir); 
   driveMotor(BackRightPWM, BackRightDIR, -dir);
 }
 
-void Turn(dir, angle) {
-  if (angle == 1) {
+void Turn(int8_t dir, bool leftSide) {
+  if (leftSide) {
     driveMotor(FrontLeftPWM, FrontLeftDIR, dir); 
     driveMotor(BackLeftPWM, BackLeftDIR, dir); 
     driveMotor(FrontRightPWM, FrontRightDIR, 0); 
@@ -166,16 +166,14 @@ void Turn(dir, angle) {
     driveMotor(FrontRightPWM, FrontRightDIR, dir); 
     driveMotor(BackRightPWM, BackRightDIR, dir);
   }
-
 }
 
-void Move(dir) {
+void Move(int8_t dir) {
   driveMotor(FrontLeftPWM, FrontLeftDIR, dir); 
   driveMotor(BackLeftPWM, BackLeftDIR, dir); 
   driveMotor(FrontRightPWM, FrontRightDIR, dir); 
   driveMotor(BackRightPWM, BackRightDIR, dir);
 }
-
 void Stop() {
   driveMotor(FrontLeftPWM, FrontLeftDIR, 0); 
   driveMotor(BackLeftPWM, BackLeftDIR, 0); 
@@ -186,6 +184,7 @@ void Stop() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+  Move(127);
 
 
 }
