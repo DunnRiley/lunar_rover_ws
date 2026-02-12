@@ -480,6 +480,13 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
         self.processes[name] = None
         self.status_lights[name].set_color("red")
 
+    def start_minipc(self):
+        command = """
+    ssh moonpie@138.67.181.222 'bash ~/lunar_rover_ws/mini_pc_launch.sh'
+    """
+        run_in_terminal(command)
+
+
     def stop_all_processes(self):
         """Emergency stop all processes"""
         for name in list(self.processes.keys()):
