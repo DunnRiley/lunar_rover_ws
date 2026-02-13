@@ -71,8 +71,7 @@ class RealRoverLauncher(QWidget):
         
         # IFWATER Stereo Camera (single device, side-by-side)
         # CHANGE THIS if your camera appears on a different device
-        # Common values: /dev/video6, /dev/video7, /dev/video32
-        self.stereo_camera_device = '/dev/video32'
+        self.stereo_camera_device = '/dev/video6'
 
         main_layout = QVBoxLayout()
 
@@ -417,7 +416,7 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
         layout = QFormLayout()
         
         info_label = QLabel("The IFWATER stereo camera appears as ONE video device.\n"
-                           "Common devices: /dev/video6, /dev/video7, /dev/video32\n\n"
+                           "Common devices: /dev/video6, /dev/video7, /dev/video6\n\n"
                            "To find your camera:\n"
                            "1. Unplug camera, run: ls /dev/video* > before.txt\n"
                            "2. Plug in camera, run: ls /dev/video* > after.txt\n"

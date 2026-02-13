@@ -161,7 +161,7 @@ if [ -n "$STEREO_SCRIPT" ]; then
     # NOTE: Reduced resolution for network streaming (800x300 @ 15fps instead of 1600x600 @ 30fps)
     python3 "$STEREO_SCRIPT" \
       --ros-args \
-      -p device:=/dev/video32 \
+      -p device:=/dev/video6 \
       -p width:=800 \
       -p height:=300 \
       -p fps:=15 \
@@ -174,7 +174,7 @@ if [ -n "$STEREO_SCRIPT" ]; then
         echo "  ✓ Stereo camera running (PID $STEREO_PID)"
     else
         echo "  ✗ Stereo camera failed to start"
-        echo "  Check device /dev/video32 exists: ls -l /dev/video32"
+        echo "  Check device /dev/video6 exists: ls -l /dev/video6"
     fi
 else
     echo "  ⚠ Skipping stereo camera (script not found)"
