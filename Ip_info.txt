@@ -1,32 +1,12 @@
-moonpie@minipc:~$ ip a
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host noprefixroute 
-       valid_lft forever preferred_lft forever
-2: eno1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN group default qlen 1000
-    link/ether 1c:69:7a:0b:ed:98 brd ff:ff:ff:ff:ff:ff
-    altname enp0s31f6
-3: wlp0s20f3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
-    link/ether 38:00:25:43:d9:0b brd ff:ff:ff:ff:ff:ff
-    inet 192.168.0.102/24 brd 192.168.0.255 scope global noprefixroute wlp0s20f3
-       valid_lft forever preferred_lft forever
-    inet6 fdab:70ae:2f74:1:a9f7:dccf:aa75:4c4a/64 scope global temporary dynamic 
-       valid_lft 603104sec preferred_lft 84435sec
-    inet6 fdab:70ae:2f74:1:9452:4bb:fd14:feb1/64 scope global dynamic mngtmpaddr noprefixroute 
-       valid_lft 2591697sec preferred_lft 604497sec
-    inet6 fe80::95b6:ef3f:dd43:8a55/64 scope link noprefixroute 
-       valid_lft forever preferred_lft forever
-4: tailscale0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1280 qdisc fq_codel state UNKNOWN group default qlen 500
-    link/none 
-    inet 100.93.241.14/32 scope global tailscale0
-       valid_lft forever preferred_lft forever
-    inet6 fd7a:115c:a1e0::d938:f10e/128 scope global 
-       valid_lft forever preferred_lft forever
-    inet6 fe80::e317:98b2:1996:c237/64 scope link stable-privacy 
-       valid_lft forever preferred_lft forever
-moonpie@minipc:~$ ip route
-default via 192.168.0.1 dev wlp0s20f3 proto static metric 20600 
-192.168.0.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.0.102 metric 600 
+sudo apt update
+sudo apt install openssh-server
+sudo systemctl enable ssh
+sudo systemctl start ssh
 
+
+sudo apt install avahi-daemon
+sudo systemctl enable avahi-daemon
+sudo systemctl start avahi-daemon
+
+
+sudo reboot
