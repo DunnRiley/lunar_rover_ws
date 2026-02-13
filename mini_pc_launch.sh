@@ -108,22 +108,28 @@ echo ""
 
 echo "[3/4] Starting Front Camera (D435)..."
 
+# NOTE: Lower resolution for better network streaming performance
+# 424x240 @ 15fps is much lighter than 640x480 @ 30fps
+# Point cloud is DISABLED by default (huge bandwidth) - enable only when needed
 ros2 launch realsense2_camera rs_launch.py \
   camera_name:=camera \
   camera_namespace:=camera \
   enable_depth:=true \
   enable_color:=true \
-  pointcloud.enable:=true \
+  pointcloud.enable:=false \
   align_depth.enable:=true \
   enable_sync:=true \
-  depth_module.profile:=640x480x30 \
-  rgb_camera.profile:=640x480x30 &
+  depth_module.profile:=424x240x15 \
+  rgb_camera.profile:=424x240x15 &
 
 CAM_PID=$!
 sleep 5
 
 if ps -p $CAM_PID > /dev/null 2>&1; then
     echo "  ✓ D435 camera running (PID $CAM_PID)"
+    echo "  NOTE: For laptop viewing, use compressed image topics:"
+    echo "    - /camera/camera/color/image_raw/compressed"
+    echo "    - /camera/camera/aligned_depth_to_color/image_raw/compressedDepth"
 else
     echo "  ✗ D435 camera failed to start!"
 fi
@@ -152,13 +158,14 @@ fi
 
 if [ -n "$STEREO_SCRIPT" ]; then
     echo "  Found: $STEREO_SCRIPT"
+    # NOTE: Reduced resolution for network streaming (800x300 @ 15fps instead of 1600x600 @ 30fps)
     python3 "$STEREO_SCRIPT" \
       --ros-args \
       -p device:=/dev/video32 \
-      -p width:=1600 \
-      -p height:=600 \
-      -p fps:=30 \
-      -p publish_rate:=30.0 &
+      -p width:=800 \
+      -p height:=300 \
+      -p fps:=15 \
+      -p publish_rate:=15.0 &
     
     STEREO_PID=$!
     sleep 2
