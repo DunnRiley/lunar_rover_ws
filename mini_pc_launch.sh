@@ -1,12 +1,11 @@
 #!/bin/bash
 # ========================================================================
-# Mini PC Hardware Launch Script
-# Place at: ~/lunar_rover_ws/mini_pc_launch.sh
-# Runs: Robot State Publisher, D435 Camera, IFWATER Stereo Camera
+# Mini PC Launch - OPTIMIZED FOR WIFI
+# Very aggressive compression for smooth streaming over poor WiFi
 # ========================================================================
 
 echo "========================================="
-echo "  MINI PC: Starting Hardware Nodes"
+echo "  MINI PC: Optimized WiFi Mode"
 echo "========================================="
 
 cd ~/lunar_rover_ws
@@ -23,13 +22,7 @@ else
     exit 1
 fi
 
-# Source workspace (optional - works without it)
-if [ -f install/setup.bash ]; then
-    source install/setup.bash
-    echo "✓ Workspace sourced"
-fi
-
-# Set network parameters for multi-machine ROS2
+# Network config
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
@@ -38,79 +31,62 @@ echo "✓ Network: ROS_DOMAIN_ID=42, SUBNET discovery"
 echo ""
 
 # ========================================================================
-# 1. ROBOT STATE PUBLISHER (Creates TF tree)
+# 1. ROBOT DESCRIPTION
 # ========================================================================
 
-echo "[1/4] Starting TF Tree (Robot State Publisher)..."
+echo "[1/5] Starting Robot State Publisher..."
 
-# Complete URDF with front and rear camera mounts
-ROBOT_URDF='<?xml version="1.0"?>
+URDF_CONTENT='<?xml version="1.0"?>
 <robot name="lunar_rover">
-  <link name="base_link">
-    <visual>
-      <geometry>
-        <box size="0.5 0.3 0.2"/>
-      </geometry>
-    </visual>
-  </link>
-  
-  <!-- Front D435 Camera -->
+  <link name="base_link"/>
   <link name="camera_link"/>
+  <link name="camera_rear_link"/>
+  
   <joint name="base_to_camera" type="fixed">
     <parent link="base_link"/>
     <child link="camera_link"/>
-    <origin xyz="0.15 0 0.2" rpy="0 0 0"/>
+    <origin xyz="0.2 0 0.15" rpy="0 0 0"/>
   </joint>
   
-  <!-- Rear IFWATER Stereo Camera -->
-  <link name="camera_rear_link"/>
   <joint name="base_to_camera_rear" type="fixed">
     <parent link="base_link"/>
     <child link="camera_rear_link"/>
-    <origin xyz="-0.15 0 0.2" rpy="0 0 3.14159265359"/>
+    <origin xyz="-0.2 0 0.15" rpy="0 0 3.14159"/>
   </joint>
 </robot>'
 
 ros2 run robot_state_publisher robot_state_publisher \
-  --ros-args \
-  -p robot_description:="$ROBOT_URDF" \
-  -p use_sim_time:=false &
+  --ros-args -p robot_description:="$URDF_CONTENT" &
 
 sleep 2
+echo "  ✓ robot_state_publisher running"
+echo ""
 
-echo "[2/4] Starting Static Transforms (Camera Optical Frames)..."
+# ========================================================================
+# 2. STATIC TRANSFORMS
+# ========================================================================
 
-# D435 Camera optical frame transforms
-ros2 run tf2_ros static_transform_publisher \
-  0 0 0 -1.5707963267948966 0 -1.5707963267948966 \
-  camera_link camera_depth_optical_frame &
+echo "[2/5] Starting Static Transforms..."
 
 ros2 run tf2_ros static_transform_publisher \
   0 0 0 -1.5707963267948966 0 -1.5707963267948966 \
   camera_link camera_color_optical_frame &
 
-# IFWATER Stereo camera optical frame transforms
 ros2 run tf2_ros static_transform_publisher \
   0 0 0 -1.5707963267948966 0 -1.5707963267948966 \
-  camera_rear_link camera_rear_left_optical_frame &
-
-ros2 run tf2_ros static_transform_publisher \
-  0.06 0 0 -1.5707963267948966 0 -1.5707963267948966 \
-  camera_rear_link camera_rear_right_optical_frame &
+  camera_link camera_depth_optical_frame &
 
 sleep 1
 echo "  ✓ TF Tree ready"
 echo ""
 
 # ========================================================================
-# 3. FRONT CAMERA (D435 - RGB + Depth + Point Cloud)
+# 3. FRONT CAMERA - HIGH RATE CAPTURE
 # ========================================================================
 
-echo "[3/4] Starting Front Camera (D435)..."
+echo "[3/5] Starting D435 Camera (high rate capture)..."
+echo "  Camera: 424x240 @ 30fps (will be decimated for streaming)"
 
-# NOTE: Lower resolution for better network streaming performance
-# 424x240 @ 15fps is much lighter than 640x480 @ 30fps
-# Point cloud is DISABLED by default (huge bandwidth) - enable only when needed
 ros2 launch realsense2_camera rs_launch.py \
   camera_name:=camera \
   camera_namespace:=camera \
@@ -119,27 +95,75 @@ ros2 launch realsense2_camera rs_launch.py \
   pointcloud.enable:=false \
   align_depth.enable:=true \
   enable_sync:=true \
-  depth_module.profile:=424x240x15 \
-  rgb_camera.profile:=424x240x15 &
+  depth_module.profile:=424x240x30 \
+  rgb_camera.profile:=424x240x30 &
 
 CAM_PID=$!
 sleep 5
 
 if ps -p $CAM_PID > /dev/null 2>&1; then
-    echo "  ✓ D435 camera running (PID $CAM_PID)"
-    echo "  NOTE: For laptop viewing, use compressed image topics:"
-    echo "    - /camera/camera/color/image_raw/compressed"
-    echo "    - /camera/camera/aligned_depth_to_color/image_raw/compressedDepth"
+    echo "  ✓ D435 camera running at 30 FPS"
 else
     echo "  ✗ D435 camera failed to start!"
 fi
 echo ""
 
 # ========================================================================
-# 4. REAR STEREO CAMERA (IFWATER)
+# 4. OPTIMIZED IMAGE PIPELINE - Aggressive Compression & Buffering
 # ========================================================================
 
-echo "[4/4] Starting Rear Stereo Camera (IFWATER)..."
+echo "[4/5] Starting Optimized Image Pipeline..."
+
+if [ -f ~/lunar_rover_ws/optimized_image_pipeline.py ]; then
+    # RGB Color - Very aggressive compression
+    python3 ~/lunar_rover_ws/optimized_image_pipeline.py \
+      --ros-args \
+      -p input_topic:=/camera/camera/color/image_raw/compressed \
+      -p output_topic:=/camera/camera/color/optimized/compressed \
+      -p jpeg_quality:=20 \
+      -p decimation:=5 \
+      -p buffer_delay_sec:=5.0 \
+      -p target_fps:=6.0 \
+      -p resize_factor:=1.0 &
+    
+    sleep 1
+    echo "  ✓ RGB pipeline: 30fps → decimate 1/5 → 20% JPEG → buffer → 6fps output"
+    
+    # Depth - Less aggressive (already grayscale)
+    python3 ~/lunar_rover_ws/optimized_image_pipeline.py \
+      --ros-args \
+      -p input_topic:=/camera/camera/aligned_depth_to_color/image_raw/compressed \
+      -p output_topic:=/camera/camera/depth/optimized/compressed \
+      -p jpeg_quality:=40 \
+      -p decimation:=3 \
+      -p buffer_delay_sec:=5.0 \
+      -p target_fps:=6.0 &
+    
+    sleep 1
+    echo "  ✓ Depth pipeline: 30fps → decimate 1/3 → 40% JPEG → buffer → 6fps output"
+    
+else
+    echo "  ✗ optimized_image_pipeline.py not found - using basic buffer"
+    
+    # Fallback to basic buffer
+    if [ -f ~/lunar_rover_ws/image_buffer.py ]; then
+        python3 ~/lunar_rover_ws/image_buffer.py \
+          --ros-args \
+          -p input_topic:=/camera/camera/color/image_raw/compressed \
+          -p output_topic:=/camera/camera/color/buffered/compressed \
+          -p buffer_delay_sec:=5.0 \
+          -p target_fps:=6.0 &
+        echo "  ✓ Basic buffer enabled"
+    fi
+fi
+
+echo ""
+
+# ========================================================================
+# 5. REAR CAMERA - Optional
+# ========================================================================
+
+echo "[5/5] Rear Stereo Camera..."
 
 # Find the stereo camera publisher script
 if [ -f ~/lunar_rover_ws/DiagnosticAndTesting/stereo_camera_publisher.py ]; then
@@ -147,59 +171,79 @@ if [ -f ~/lunar_rover_ws/DiagnosticAndTesting/stereo_camera_publisher.py ]; then
 elif [ -f ~/lunar_rover_ws/stereo_camera_publisher.py ]; then
     STEREO_SCRIPT=~/lunar_rover_ws/stereo_camera_publisher.py
 else
-    echo "  ✗ stereo_camera_publisher.py not found!"
-    echo "  Looking in:"
-    echo "    - ~/lunar_rover_ws/DiagnosticAndTesting/"
-    echo "    - ~/lunar_rover_ws/"
-    echo ""
-    echo "  Skipping rear camera..."
     STEREO_SCRIPT=""
 fi
 
 if [ -n "$STEREO_SCRIPT" ]; then
-    echo "  Found: $STEREO_SCRIPT"
-    # NOTE: Reduced resolution for network streaming (800x300 @ 15fps instead of 1600x600 @ 30fps)
+    echo "  Starting rear camera (480x180 @ 15fps)..."
     python3 "$STEREO_SCRIPT" \
       --ros-args \
-      -p device:=/dev/video6 \
-      -p width:=800 \
-      -p height:=300 \
+      -p device:=/dev/video32 \
+      -p width:=480 \
+      -p height:=180 \
       -p fps:=15 \
       -p publish_rate:=15.0 &
     
-    STEREO_PID=$!
     sleep 2
     
-    if ps -p $STEREO_PID > /dev/null 2>&1; then
-        echo "  ✓ Stereo camera running (PID $STEREO_PID)"
-    else
-        echo "  ✗ Stereo camera failed to start"
-        echo "  Check device /dev/video6 exists: ls -l /dev/video6"
+    # Start stereo combiner
+    if [ -f ~/lunar_rover_ws/stereo_combiner.py ]; then
+        python3 ~/lunar_rover_ws/stereo_combiner.py \
+          --ros-args \
+          -p left_crop_start:=0 \
+          -p left_crop_width:=240 \
+          -p right_crop_start:=240 \
+          -p right_crop_width:=240 \
+          -p publish_compressed:=true &
+        
+        sleep 1
+        
+        # Buffer the combined stereo
+        if [ -f ~/lunar_rover_ws/image_buffer.py ]; then
+            python3 ~/lunar_rover_ws/image_buffer.py \
+              --ros-args \
+              -p input_topic:=/camera_rear/stereo_combined/compressed \
+              -p output_topic:=/camera_rear/stereo_optimized/compressed \
+              -p buffer_delay_sec:=5.0 \
+              -p target_fps:=6.0 &
+        fi
+        
+        echo "  ✓ Rear stereo combined and buffered"
     fi
 else
-    echo "  ⚠ Skipping stereo camera (script not found)"
+    echo "  Rear camera disabled"
 fi
 
 echo ""
+
+# ========================================================================
+# MOTOR CONTROLLER (Uncomment when ready)
+# ========================================================================
+
+# echo "Starting Motor Controller..."
+# python3 ~/lunar_rover_ws/motor_controller.py &
+
+echo ""
 echo "========================================="
-echo "  ✓✓✓ MINI PC HARDWARE READY ✓✓✓"
+echo "  ✓✓✓ OPTIMIZED MODE READY ✓✓✓"
 echo "========================================="
 echo ""
-echo "Running nodes:"
-echo "  • Robot State Publisher"
-echo "  • TF Static Transforms"
-echo "  • D435 Camera (front)"
-if [ -n "$STEREO_SCRIPT" ]; then
-    echo "  • IFWATER Stereo Camera (rear)"
-fi
+echo "STREAMING STRATEGY:"
+echo "  • Camera captures at 30 FPS (smooth local)"
+echo "  • Decimates to 1/5 frames (6 FPS)"
+echo "  • Re-compresses JPEG at 20% quality (tiny)"
+echo "  • Buffers 5 seconds"
+echo "  • Streams out at steady 6 FPS"
 echo ""
-echo "Network: ROS_DOMAIN_ID=42"
+echo "LAPTOP TOPICS (use these in RViz):"
+echo "  Front RGB:  /camera/camera/color/optimized/compressed"
+echo "  Depth:      /camera/camera/depth/optimized/compressed"
+echo "  Rear:       /camera_rear/stereo_optimized/compressed"
 echo ""
-echo "From LAPTOP, run:"
-echo "  bash ~/lunar_rover_ws/laptop_ros_launch.sh"
+echo "EXPECTED BANDWIDTH: ~150-300 KB/sec total"
+echo "EXPECTED LATENCY: 5 seconds (buffered)"
 echo ""
 echo "Press Ctrl+C to stop all nodes"
 echo "========================================="
 
-# Wait for all background processes
 wait

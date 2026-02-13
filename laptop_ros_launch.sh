@@ -52,9 +52,9 @@ else
     echo "⚠ Warning: Cannot see topics from mini PC!"
     echo ""
     echo "  Troubleshooting:"
-    echo "  1. Is mini PC running? ssh moonpie@192.168.0.102"
+    echo "  1. Is mini PC running? ssh moonpie@138.67.181.222"
     echo "  2. Run on mini PC: bash ~/lunar_rover_ws/mini_pc_launch.sh"
-    echo "  3. Check network: ping 192.168.0.102"
+    echo "  3. Check network: ping 138.67.181.222"
     echo "  4. Verify ROS_DOMAIN_ID=42 on both machines"
     echo ""
     echo "  Continuing anyway - you can test locally..."
@@ -69,19 +69,66 @@ trap 'echo ""; echo "Shutting down..."; kill 0' SIGINT SIGTERM
 # ========================================================================
 
 echo ""
-echo "Starting RViz..."
+echo "Detecting available camera topics..."
 
-# Check for existing RViz config
-if [ -f ~/lunar_rover_ws/hardware_navigation.rviz ]; then
-    RVIZ_CONFIG=~/lunar_rover_ws/hardware_navigation.rviz
-    echo "  Using config: hardware_navigation.rviz"
-elif [ -f ~/lunar_rover_ws/realsense_working.rviz ]; then
-    RVIZ_CONFIG=~/lunar_rover_ws/realsense_working.rviz
-    echo "  Using config: realsense_working.rviz"
+# Check if buffered topics are available
+BUFFERED_TOPICS=$(ros2 topic list 2>/dev/null | grep -c "buffered" || echo "0")
+
+if [ "$BUFFERED_TOPICS" -gt 0 ]; then
+    echo "  ✓ Found buffered topics - using buffered config"
+    USE_BUFFERED=true
+    
+    # Create buffered RViz config if it doesn't exist
+    if [ ! -f ~/lunar_rover_ws/rover_buffered.rviz ]; then
+        echo "  Creating rover_buffered.rviz config..."
+        cat > ~/lunar_rover_ws/rover_buffered_temp.rviz << 'EOF'
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Name: Front Camera (Buffered)
+      Topic:
+        Value: /camera/camera/color/buffered/compressed
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Name: Rear Stereo Combined
+      Topic:
+        Value: /camera_rear/stereo_buffered/compressed
+      Value: true
+  Global Options:
+    Fixed Frame: base_link
+EOF
+        RVIZ_CONFIG=~/lunar_rover_ws/rover_buffered_temp.rviz
+    else
+        RVIZ_CONFIG=~/lunar_rover_ws/rover_buffered.rviz
+    fi
 else
-    echo "  Using default RViz config"
-    RVIZ_CONFIG=""
+    echo "  ⚠ No buffered topics found - using compressed topics"
+    USE_BUFFERED=false
+    
+    # Check for existing configs
+    if [ -f ~/lunar_rover_ws/hardware_navigation.rviz ]; then
+        RVIZ_CONFIG=~/lunar_rover_ws/hardware_navigation.rviz
+        echo "  Using config: hardware_navigation.rviz"
+    elif [ -f ~/lunar_rover_ws/realsense_working.rviz ]; then
+        RVIZ_CONFIG=~/lunar_rover_ws/realsense_working.rviz
+        echo "  Using config: realsense_working.rviz"
+    else
+        echo "  Using default RViz config"
+        RVIZ_CONFIG=""
+    fi
 fi
+
+echo ""
+echo "Starting RViz..."
 
 if [ -n "$RVIZ_CONFIG" ]; then
     ros2 run rviz2 rviz2 -d "$RVIZ_CONFIG" \
@@ -96,6 +143,23 @@ sleep 2
 
 if ps -p $RVIZ_PID > /dev/null 2>&1; then
     echo "  ✓ RViz running (PID $RVIZ_PID)"
+    
+    if [ "$USE_BUFFERED" = true ]; then
+        echo ""
+        echo "  📺 BUFFERED MODE ACTIVE"
+        echo "  Initial 5 second delay, then smooth playback"
+        echo ""
+        echo "  To add displays in RViz:"
+        echo "    Add → Image"
+        echo "    Front camera: /camera/camera/color/buffered/compressed"
+        echo "    Rear stereo: /camera_rear/stereo_buffered/compressed"
+    else
+        echo ""
+        echo "  To add displays in RViz:"
+        echo "    Add → Image"
+        echo "    Front camera: /camera/camera/color/image_raw/compressed"
+        echo "    Rear stereo: /camera_rear/stereo_combined/compressed"
+    fi
 else
     echo "  ✗ RViz failed to start"
 fi
@@ -187,22 +251,40 @@ echo ""
 echo "RUNNING NODES:"
 ps aux | grep -E "rviz2|teleop|joy|nav2" | grep -v grep
 echo ""
-echo "IN RVIZ - USE COMPRESSED TOPICS FOR BEST PERFORMANCE:"
-echo "  1. Fixed Frame: base_link (or odom for Nav2)"
-echo "  2. Add Image displays using COMPRESSED transport:"
-echo "     Add → Image → /camera/camera/color/image_raw/compressed"
-echo "     (Make sure Transport dropdown = 'compressed')"
-echo ""
-echo "  Other compressed topics:"
-echo "     /camera/camera/aligned_depth_to_color/image_raw/compressedDepth"
-echo "     /camera_rear/left/image_raw/compressed"
-echo "     /camera_rear/right/image_raw/compressed"
-echo ""
-echo "  ⚠ AVOID point cloud over WiFi (very slow)"
-echo "     /camera/camera/depth/color/points (disabled by default)"
-echo ""
+
+# Check again for buffered topics
+BUFFERED_CHECK=$(ros2 topic list 2>/dev/null | grep -c "buffered" || echo "0")
+
+if [ "$BUFFERED_CHECK" -gt 0 ]; then
+    echo "📺 BUFFERED MODE - Using 5 second delay for smooth playback"
+    echo ""
+    echo "IN RVIZ - BUFFERED TOPICS (smooth, 5s delay):"
+    echo "  1. Fixed Frame: base_link"
+    echo "  2. Image displays should use:"
+    echo "     Front: /camera/camera/color/buffered/compressed"
+    echo "     Rear:  /camera_rear/stereo_buffered/compressed"
+    echo "     Depth: /camera/camera/aligned_depth_to_color/image_raw/compressedDepth"
+    echo ""
+    echo "  💡 Wait 5 seconds for buffer to fill, then smooth 6 FPS playback!"
+    echo ""
+else
+    echo "IN RVIZ - USE COMPRESSED TOPICS FOR BEST PERFORMANCE:"
+    echo "  1. Fixed Frame: base_link (or odom for Nav2)"
+    echo "  2. Add Image displays using COMPRESSED transport:"
+    echo "     Add → Image → /camera/camera/color/image_raw/compressed"
+    echo "     (Make sure Transport dropdown = 'compressed')"
+    echo ""
+    echo "  Other compressed topics:"
+    echo "     /camera/camera/aligned_depth_to_color/image_raw/compressedDepth"
+    echo "     /camera_rear/stereo_combined/compressed"
+    echo ""
+    echo "  ⚠ AVOID point cloud over WiFi (very slow)"
+    echo "     /camera/camera/depth/color/points (disabled by default)"
+    echo ""
+fi
+
 echo "AVAILABLE TOPICS:"
-ros2 topic list | grep -E "camera|cmd_vel|scan|map|goal|compressed" || echo "  (none yet)"
+ros2 topic list | grep -E "camera|cmd_vel|scan|map|goal|compressed|buffered" | head -15 || echo "  (none yet)"
 echo ""
 echo "Press Ctrl+C to stop all nodes"
 echo "========================================="
