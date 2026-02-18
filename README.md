@@ -44,13 +44,3 @@ ros2 run lunar_robot_hardware arduino_teleop
 ### Terminal 2 for point click navigation
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py
 
-//////////////////////////////////////////////////////////////////////////
-ToDo:
-- need to update hardware conntrolling in ROS to use new hardware and an Arduino (Have a fix need to test arduino with and without ros)
-- need to update telleop's (Added new teleop for arduino one with and without ros. Still need to add camera movment)
-- need to fix RViz and RTAB map *(Work in progress currently looking into new solutions)
-    - Is it possible to make and use the map all at once or do we need to make the map then use it?
-- Add a better and more secure option for startup. (Current static IP and have two launch files a laptop and miniPC version, need to fix hardware control but have bad connection to camera over wifi)
-    - I will not have access to a monitor for the miniPC on start so I need a headless startup.
-
-//////////////////////////////////////////////////////////////////////////
