@@ -1,36 +1,56 @@
-## lunar_rover_ws
-# Connect to moonpie MiniPC
-// MiniPC is named moonpie and has a static IP of 138.67.181.222
-// run on laptop
+# lunar_rover_ws
+## Connect to moonpie MiniPC
+### MiniPC is named moonpie and has a static IP of 138.67.181.222
+### run on laptop
 ssh moonpie@138.67.181.222
 
-// note all code is on the MiniPC and both computers have to be on the same Wifi
+### note all code is on the MiniPC and laptop. Both computers have to be on the same Wifi
 
-# How to run:
+## How to run:
 cd ~/lunar_rover_ws
 colcon build 
 source install/setup.bash
 
-# Python script with buttons to all needed ros nodes and rviz need to add RTAB-Map
+## Python script with buttons to all needed ros nodes and rviz need to add RTAB-Map. Tests all on one computer (Not as usefull anymore)
 python3 rover_launcher.py
 
-# Test motors individualy 
-// need to update to use new hardware and an Arduino
-cd DiagnosticAndTesting
-python3 single_motor_test.py
+## Run with mission control (laptop) and robot brain (MiniPC)
+- MiniPC:
+ssh moonpie@IP
+bash mini_pc_launch.sh
 
-# Test drive chain and actuators 
-// need to update to use new hardware and an Arduino
-cd DiagnosticAndTesting
-python3 test_drive.py
+- Laptop
+bash laptop_ros_launch
 
-# Test Camera
+- 2nd Terminal (not tested)
+pyhton3 laptop_control_gui.py
+
+
+## Test arduino teleop code no ROS
+cd /lunar_rover_ws/src/lunar_robot_hardware/lunar_robot_hardware/src
+python3 teleop_no_ros.py
+
+## Test Camera
 cd DiagnosticAndTesting
 bash test_camera_transforms.sh
 
-# Teleop 
-python3 teleop_keyboard.py
+## Teleop 
+### Terminal 1
+ros2 run lunar_robot_hardware arduino_motor_controller
 
-# or 
+### Terminal 2
+ros2 run lunar_robot_hardware arduino_teleop
 
-python3 controller_teleop.py
+### Terminal 2 for point click navigation
+ros2 launch lunar_robot_hardware arduino_navigation.launch.py
+
+//////////////////////////////////////////////////////////////////////////
+ToDo:
+- need to update hardware conntrolling in ROS to use new hardware and an Arduino (Have a fix need to test arduino with and without ros)
+- need to update telleop's (Added new teleop for arduino one with and without ros. Still need to add camera movment)
+- need to fix RViz and RTAB map *(Work in progress currently looking into new solutions)
+    - Is it possible to make and use the map all at once or do we need to make the map then use it?
+- Add a better and more secure option for startup. (Current static IP and have two launch files a laptop and miniPC version, need to fix hardware control but have bad connection to camera over wifi)
+    - I will not have access to a monitor for the miniPC on start so I need a headless startup.
+
+//////////////////////////////////////////////////////////////////////////

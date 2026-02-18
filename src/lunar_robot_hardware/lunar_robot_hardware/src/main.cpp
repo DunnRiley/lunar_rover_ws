@@ -124,7 +124,14 @@ void setup() {
   pinMode(ActuatorEncoder1A, INPUT_PULLUP);
   pinMode(ActuatorEncoder1B, INPUT_PULLUP);
   pinMode(ActuatorEncoder2A, INPUT_PULLUP);
-  pinMode(ActuatorEncoder2B, INPUT_PULLUP);
+  pinMode(ActuatorEncoder2B, INPUT_PULLUP);\\
+
+
+  int8_t currentSpeed = 40;     // start slow
+  const int8_t SPEED_STEP = 10;
+  unsigned long lastCmdTime = 0;
+  const unsigned long CMD_TIMEOUT = 100; // ms
+
 
 // Engage COMs
 Serial.begin(115200);
@@ -174,6 +181,7 @@ void Move(int8_t dir) {
   driveMotor(FrontRightPWM, FrontRightDIR, dir); 
   driveMotor(BackRightPWM, BackRightDIR, dir);
 }
+
 void Stop() {
   driveMotor(FrontLeftPWM, FrontLeftDIR, 0); 
   driveMotor(BackLeftPWM, BackLeftDIR, 0); 
@@ -181,13 +189,76 @@ void Stop() {
   driveMotor(BackRightPWM, BackRightDIR, 0);
 }
 
+void moveActuators(int8_t speed) {
+  driveMotor(LeftActuatorPWM, LeftActuatorDIR, speed);
+  driveMotor(RightActuatorPWM, RightActuatorDIR, speed);
+}
+
+
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  Move(127);
+  if (Serial.available()) {
+    char cmd = Serial.read();
+    lastCmdTime = millis();
 
+    switch (cmd) {
 
+      // -------- SPEED CONTROL --------
+      case 'r':
+        currentSpeed = min<int8_t>(127, currentSpeed + SPEED_STEP);
+        break;
+      case 'f':
+        currentSpeed = max<int8_t>(10, currentSpeed - SPEED_STEP);
+        break;
+
+      // -------- DRIVE --------
+      case 'w': Move(currentSpeed); break;
+      case 's': Move(-currentSpeed); break;
+      case 'a': RIP(-currentSpeed); break;
+      case 'd': RIP(currentSpeed); break;
+
+      // -------- ARC TURNS --------
+      case 'q': // wa
+        driveMotor(FrontLeftPWM, FrontLeftDIR, currentSpeed / 2);
+        driveMotor(BackLeftPWM, BackLeftDIR, currentSpeed / 2);
+        driveMotor(FrontRightPWM, FrontRightDIR, currentSpeed);
+        driveMotor(BackRightPWM, BackRightDIR, currentSpeed);
+        break;
+
+      case 'e': // wd
+        driveMotor(FrontLeftPWM, FrontLeftDIR, currentSpeed);
+        driveMotor(BackLeftPWM, BackLeftDIR, currentSpeed);
+        driveMotor(FrontRightPWM, FrontRightDIR, currentSpeed / 2);
+        driveMotor(BackRightPWM, BackRightDIR, currentSpeed / 2);
+        break;
+
+      case 'z': // sa
+        driveMotor(FrontLeftPWM, FrontLeftDIR, -currentSpeed / 2);
+        driveMotor(BackLeftPWM, BackLeftDIR, -currentSpeed / 2);
+        driveMotor(FrontRightPWM, FrontRightDIR, -currentSpeed);
+        driveMotor(BackRightPWM, BackRightDIR, -currentSpeed);
+        break;
+
+      case 'c': // sd
+        driveMotor(FrontLeftPWM, FrontLeftDIR, -currentSpeed);
+        driveMotor(BackLeftPWM, BackLeftDIR, -currentSpeed);
+        driveMotor(FrontRightPWM, FrontRightDIR, -currentSpeed / 2);
+        driveMotor(BackRightPWM, BackRightDIR, -currentSpeed / 2);
+        break;
+
+      // -------- ACTUATORS --------
+      case 'o': moveActuators(currentSpeed); break;
+      case 'l': moveActuators(-currentSpeed); break;
+    }
+  }
+
+  // -------- SAFETY STOP --------
+  if (millis() - lastCmdTime > CMD_TIMEOUT) {
+    Stop();
+    moveActuators(0);
+  }
 }
+
 
 // put function definitions here:
 int MotorDriving() {
