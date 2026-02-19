@@ -177,10 +177,10 @@ for candidate in \
 done
 
 if [ -n "$STEREO_SCRIPT" ]; then
-    echo "  Starting stereo camera (device /dev/video32, 480x180 @ 15fps)..."
+    echo "  Starting stereo camera (device /dev/video0, 480x180 @ 15fps)..."
     python3 "$STEREO_SCRIPT" \
         --ros-args \
-        -p device:=/dev/video32 \
+        -p device:=/dev/video0 \
         -p width:=480 \
         -p height:=180 \
         -p fps:=15 \

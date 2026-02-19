@@ -100,7 +100,7 @@ class OptimizedImagePipeline(Node):
             self.get_logger().error(f'Decode error: {e}', throttle_duration_sec=5.0)
 
     def raw_callback(self, msg: Image):
-        """Handle incoming raw Image messages."""
+        """Handle incoming raw Image messages (color or depth)."""
         self.received += 1
         self.frame_count += 1
 
@@ -108,7 +108,17 @@ class OptimizedImagePipeline(Node):
             return
 
         try:
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            # Depth images are 16UC1 — use passthrough then convert to a
+            # displayable 8-bit colormap so they can be JPEG-encoded normally.
+            if msg.encoding in ('16UC1', '32FC1'):
+                raw = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+                # Normalize to 0-255 for JPEG encoding (clip at 4m = 4000mm)
+                clipped = np.clip(raw, 0, 4000).astype(np.float32)
+                normalized = (clipped / 4000.0 * 255).astype(np.uint8)
+                frame = cv2.applyColorMap(normalized, cv2.COLORMAP_TURBO)
+            else:
+                frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
             self._process_and_buffer(frame, msg.header.frame_id)
         except Exception as e:
             self.decode_errors += 1
@@ -172,11 +182,14 @@ def main(args=None):
     node = OptimizedImagePipeline()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass  # Already shut down — harmless
 
 
 if __name__ == '__main__':
