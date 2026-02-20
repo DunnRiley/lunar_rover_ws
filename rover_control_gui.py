@@ -11,6 +11,7 @@ DDS/UDP (~2 ms), completely eliminating SSH keystroke lag/stutter.
 import os
 import sys
 import math
+import queue
 import subprocess
 import threading
 import time
@@ -18,7 +19,7 @@ import time
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QGroupBox, QTextEdit, QSlider,
-    QSizePolicy, QFrame
+    QSizePolicy, QFrame, QLineEdit
 )
 from PyQt5.QtGui import (
     QFont, QColor, QPainter, QBrush, QPen,
@@ -66,7 +67,8 @@ class TeleopPublisher(QThread):
 
         # Keyboard state
         self._keys: set = set()
-        self._actuator_pub = None   # publishes /actuator_cmd (std_msgs/String)
+        self._actuator_pub  = None   # publishes /actuator_cmd
+        self._actuator_queue = queue.Queue()  # thread-safe command delivery
 
     def set_speed(self, v: float):
         with self._lock:
@@ -121,19 +123,36 @@ class TeleopPublisher(QThread):
             executor = rclpy.executors.SingleThreadedExecutor()
             executor.add_node(self._node)
 
+            next_time = time.monotonic()
             while self._running and rclpy.ok():
                 self._compute_from_keys()
 
+                # Publish cmd_vel
                 msg = Twist()
                 with self._lock:
                     msg.linear.x  = float(self._linear)
                     msg.angular.z = float(self._angular)
-
                 self._pub.publish(msg)
 
-                # Spin briefly to process any callbacks
+                # Drain actuator queue — all pending commands published from ROS thread
+                while True:
+                    try:
+                        act_cmd = self._actuator_queue.get_nowait()
+                        act_msg = RosString()
+                        act_msg.data = act_cmd
+                        self._actuator_pub.publish(act_msg)
+                    except queue.Empty:
+                        break
+
                 executor.spin_once(timeout_sec=0.0)
-                time.sleep(period)
+
+                # Accurate sleep: compensate for processing time to prevent drift/stutter
+                next_time += period
+                sleep_for = next_time - time.monotonic()
+                if sleep_for > 0:
+                    time.sleep(sleep_for)
+                else:
+                    next_time = time.monotonic()  # fallen behind; reset without pile-up
 
         except Exception as e:
             self.status_changed.emit(f"Teleop error: {e}")
@@ -146,14 +165,8 @@ class TeleopPublisher(QThread):
                     pass
 
     def send_actuator(self, command: str):
-        """Publish an actuator command string, e.g. 'extend' or 'retract'."""
-        if self._actuator_pub and rclpy.ok():
-            try:
-                msg = RosString()
-                msg.data = command
-                self._actuator_pub.publish(msg)
-            except Exception:
-                pass
+        """Queue an actuator command for the ROS thread to publish safely."""
+        self._actuator_queue.put(command)
 
     def stop(self):
         self._running = False
@@ -494,6 +507,26 @@ class MissionControl(QWidget):
         self.minipc_status.setStyleSheet("color:#506070; font-size:10px;")
         launch_row.addWidget(self.minipc_status)
         mb_layout.addLayout(launch_row)
+
+        # Competition delay row
+        delay_row = QHBoxLayout()
+        delay_lbl = QLabel("⏱ Competition delay:")
+        delay_lbl.setStyleSheet("color:#8090aa; font-size:10px;")
+        delay_row.addWidget(delay_lbl)
+        self.delay_input = QLineEdit("0.0")
+        self.delay_input.setFixedWidth(55)
+        self.delay_input.setPlaceholderText("0.0")
+        self.delay_input.setStyleSheet(
+            "background:#1a1e28; color:#e8a030; border:1px solid #2a3040; "
+            "border-radius:3px; padding:2px 4px; font-size:11px;"
+        )
+        delay_row.addWidget(self.delay_input)
+        delay_sec_lbl = QLabel("sec  (0 = live mode)")
+        delay_sec_lbl.setStyleSheet("color:#506070; font-size:10px;")
+        delay_row.addWidget(delay_sec_lbl)
+        delay_row.addStretch()
+        mb_layout.addLayout(delay_row)
+
         left.addWidget(minipc_box)
 
         # 2. RViz
@@ -734,21 +767,31 @@ class MissionControl(QWidget):
 
     # ── Mini PC ───────────────────────────────────────────────────────────
     def _start_minipc(self):
-        self._log(f"SSH-starting mini PC at {MINIPC_USER}@{MINIPC_IP}…")
+        # Read delay value from input box
+        try:
+            delay = float(self.delay_input.text().strip() or "0.0")
+            delay = max(0.0, delay)
+        except ValueError:
+            delay = 0.0
+            self.delay_input.setText("0.0")
+
+        delay_str = f"{delay:.1f}"
+        mode_str  = f"competition delay {delay_str}s" if delay > 0 else "live mode"
+        self._log(f"SSH-starting mini PC at {MINIPC_USER}@{MINIPC_IP}… ({mode_str})")
         self.minipc_status.setText("Starting via SSH…")
         self.minipc_led.set_color("yellow")
 
         cmd = (
             f'ssh -o ConnectTimeout=6 {MINIPC_USER}@{MINIPC_IP} '
-            f'"nohup bash {MINIPC_WS}/full_launch_minipc.sh '
+            f'"DELAY_SEC={delay_str} nohup bash {MINIPC_WS}/full_launch_minipc.sh '
             f'> /tmp/minipc_launch.log 2>&1 &"'
         )
 
         def run():
             result = subprocess.run(cmd, shell=True)
             if result.returncode == 0:
-                self._log("Mini PC launch command sent ✓")
-                self.minipc_status.setText("Launched via SSH")
+                self._log(f"Mini PC launch command sent ✓  (DELAY_SEC={delay_str})")
+                self.minipc_status.setText(f"Launched  ·  {mode_str}")
                 self.minipc_led.set_color("green")
             else:
                 self._log("SSH failed — is miniPC reachable?")
