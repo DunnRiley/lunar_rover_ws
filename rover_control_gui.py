@@ -33,6 +33,7 @@ try:
     import rclpy
     from rclpy.node import Node
     from geometry_msgs.msg import Twist
+    from std_msgs.msg import String as RosString
     ROS_AVAILABLE = True
 except ImportError:
     ROS_AVAILABLE = False
@@ -65,6 +66,7 @@ class TeleopPublisher(QThread):
 
         # Keyboard state
         self._keys: set = set()
+        self._actuator_pub = None   # publishes /actuator_cmd (std_msgs/String)
 
     def set_speed(self, v: float):
         with self._lock:
@@ -93,10 +95,10 @@ class TeleopPublisher(QThread):
         spd = self._speed
         with self._lock:
             s = self._speed
-        if Qt.Key_W in self._keys: lin  =  s
-        if Qt.Key_S in self._keys: lin  = -s
-        if Qt.Key_A in self._keys: ang  =  s * 1.5
-        if Qt.Key_D in self._keys: ang  = -s * 1.5
+        if Qt.Key_W in self._keys: ang  =  s * 1.5   # W → forward (was linear, now angular)
+        if Qt.Key_S in self._keys: ang  = -s * 1.5   # S → backward
+        if Qt.Key_A in self._keys: lin  =  s          # A → left (was angular, now linear)
+        if Qt.Key_D in self._keys: lin  = -s          # D → right
         with self._lock:
             self._linear  = lin
             self._angular = ang
@@ -111,6 +113,7 @@ class TeleopPublisher(QThread):
                 rclpy.init()
             self._node = rclpy.create_node('rover_laptop_teleop')
             self._pub  = self._node.create_publisher(Twist, '/cmd_vel', 10)
+            self._actuator_pub = self._node.create_publisher(RosString, '/actuator_cmd', 10)
             self._running = True
             self.status_changed.emit("Teleop node running")
 
@@ -142,6 +145,16 @@ class TeleopPublisher(QThread):
                 except Exception:
                     pass
 
+    def send_actuator(self, command: str):
+        """Publish an actuator command string, e.g. 'extend' or 'retract'."""
+        if self._actuator_pub and rclpy.ok():
+            try:
+                msg = RosString()
+                msg.data = command
+                self._actuator_pub.publish(msg)
+            except Exception:
+                pass
+
     def stop(self):
         self._running = False
         self.emergency_stop()
@@ -166,8 +179,8 @@ class JoystickWidget(QWidget):
     def _emit(self):
         dx = (self._stick.x() - self._center.x()) / self._radius
         dy = (self._stick.y() - self._center.y()) / self._radius
-        linear  = -dy  # up = forward
-        angular = -dx  # left = positive (ROS convention)
+        linear  = -dx  # left/right → linear.x (hardware swap)
+        angular = -dy  # up/down   → angular.z
         self.velocity_changed.emit(
             max(-1.0, min(1.0, linear)),
             max(-1.0, min(1.0, angular))
@@ -590,6 +603,35 @@ class MissionControl(QWidget):
         tlayout.addLayout(joy_row)
 
         right.addWidget(tbox)
+
+        # ── ACTUATOR CONTROL ──────────────────────────────────────────────
+        abox = QGroupBox("ACTUATORS  ·  /actuator_cmd")
+        alayout = QVBoxLayout(abox)
+        alayout.setSpacing(6)
+
+        akeys_hint = QLabel("P = Extend  ·  L = Retract  ·  (teleop must be active)")
+        akeys_hint.setStyleSheet("color:#405060; font-size:9px;")
+        alayout.addWidget(akeys_hint)
+
+        abtn_row = QHBoxLayout()
+
+        self.act_extend_btn = self._make_btn("▲  EXTEND  [P]", "#1a2820", "#2a6040", "#40c070")
+        self.act_extend_btn.pressed.connect(lambda: self._actuator_cmd("extend"))
+        self.act_extend_btn.released.connect(lambda: self._actuator_cmd("stop"))
+        abtn_row.addWidget(self.act_extend_btn)
+
+        self.act_retract_btn = self._make_btn("▼  RETRACT  [L]", "#281a1a", "#602a2a", "#c04040")
+        self.act_retract_btn.pressed.connect(lambda: self._actuator_cmd("retract"))
+        self.act_retract_btn.released.connect(lambda: self._actuator_cmd("stop"))
+        abtn_row.addWidget(self.act_retract_btn)
+
+        alayout.addLayout(abtn_row)
+
+        self.act_status = QLabel("Actuator: idle")
+        self.act_status.setStyleSheet("color:#607080; font-size:9px;")
+        alayout.addWidget(self.act_status)
+
+        right.addWidget(abox)
         right.addStretch()
 
         root.addStretch()
@@ -804,11 +846,18 @@ class MissionControl(QWidget):
             self._teleop_thread.key_press(key)
             self._update_key_visuals()
 
+        if key == Qt.Key_P:
+            self._actuator_cmd("extend")
+        if key == Qt.Key_L:
+            self._actuator_cmd("retract")
+
     def keyReleaseEvent(self, e):
         key = e.key()
         if key in (Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D) and self._teleop_thread:
             self._teleop_thread.key_release(key)
             self._update_key_visuals()
+        if key in (Qt.Key_P, Qt.Key_L):
+            self._actuator_cmd("stop")
 
     def _update_key_visuals(self):
         if not self._teleop_thread:
@@ -819,6 +868,15 @@ class MissionControl(QWidget):
         for lbl, key in ((self._key_w, Qt.Key_W), (self._key_a, Qt.Key_A),
                           (self._key_s, Qt.Key_S), (self._key_d, Qt.Key_D)):
             lbl.setStyleSheet(active_style if key in held else inactive_style)
+
+    def _actuator_cmd(self, command: str):
+        """Send actuator command and update status label."""
+        if self._teleop_thread:
+            self._teleop_thread.send_actuator(command)
+        label = {"extend": "▲ Extending…", "retract": "▼ Retracting…", "stop": "Actuator: idle"}.get(command, command)
+        self.act_status.setText(label)
+        color = {"extend": "#40c070", "retract": "#c04040", "stop": "#607080"}.get(command, "#607080")
+        self.act_status.setStyleSheet(f"color:{color}; font-size:9px;")
 
     # ── Velocity display ──────────────────────────────────────────────────
     def _update_vel_display(self):
