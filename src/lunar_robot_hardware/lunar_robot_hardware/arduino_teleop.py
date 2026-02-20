@@ -148,19 +148,21 @@ def main_curses(stdscr):
 
             if ch == 'a':
                 node.publish_drive(speed, 0.0)
-                status = 'Forward'
+                status = 'Pivot Left'
 
             elif ch == 'd':
                 node.publish_drive(-speed, 0.0)
-                status = 'Backward'
+                tatus = 'Pivot Right'
+
 
             elif ch == 'w':
                 node.publish_drive(0.0,  speed * ANGULAR_SCALE)
-                status = 'Pivot Left'
+                status = 'Forward'
+
 
             elif ch == 's':
                 node.publish_drive(0.0, -speed * ANGULAR_SCALE)
-                status = 'Pivot Right'
+                status = 'Backward'
 
             # ── Actuator keys ─────────────────────────────────────────────
             # Stop drive when using actuators

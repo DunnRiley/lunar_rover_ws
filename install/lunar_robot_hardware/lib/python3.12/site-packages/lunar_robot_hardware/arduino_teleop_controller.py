@@ -150,12 +150,11 @@ class ControllerTeleop(Node):
         twist = Twist()
 
         if fwd != 0.0 and turn == 0.0:
-            # Pure forward / backward — no rotation
-            twist.linear.x = fwd * self.speed
+            twist.angular.z = turn * self.speed * ANGULAR_SCALE
 
         elif turn != 0.0 and fwd == 0.0:
-            # Pure pivot — zero linear
             twist.angular.z = turn * self.speed * ANGULAR_SCALE
+            twist.linear.x = fwd * self.speed
 
         elif fwd != 0.0 and turn != 0.0:
             # Both axes — gentle arc
