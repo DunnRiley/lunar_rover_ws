@@ -1,10 +1,12 @@
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/arduino_hardware_interface.py
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/arduino_motor_controller.py
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/arduino_teleop.py
+/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/arduino_teleop_controller.py
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/__init__.py
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/__pycache__/arduino_hardware_interface.cpython-312.pyc
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/__pycache__/arduino_motor_controller.cpython-312.pyc
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/__pycache__/arduino_teleop.cpython-312.pyc
+/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/__pycache__/arduino_teleop_controller.cpython-312.pyc
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware/__pycache__/__init__.cpython-312.pyc
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/share/ament_index/resource_index/packages/lunar_robot_hardware
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.xml
@@ -26,4 +28,6 @@
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware-0.0.1-py3.12.egg-info/entry_points.txt
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware/arduino_motor_controller
 /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware/arduino_teleop
-/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware/arduino_teleop_hold
+/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware/controller_teleop
+/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware/motor_controller_node
+/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware/simple_odom_publisher

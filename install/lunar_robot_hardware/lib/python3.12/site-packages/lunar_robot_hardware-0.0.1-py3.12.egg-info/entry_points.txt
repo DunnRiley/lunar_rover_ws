@@ -1,4 +1,6 @@
 [console_scripts]
 arduino_motor_controller = lunar_robot_hardware.arduino_motor_controller:main
 arduino_teleop = lunar_robot_hardware.arduino_teleop:main
-arduino_teleop_hold = lunar_robot_hardware.arduino_teleop_hold:main
+controller_teleop = lunar_robot_hardware.arduino_teleop_controller:main
+motor_controller_node = lunar_robot_hardware.motor_controller:main
+simple_odom_publisher = lunar_robot_hardware.simple_odom:main

@@ -1,0 +1,21 @@
+running egg_info
+writing ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/PKG-INFO
+writing dependency_links to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/dependency_links.txt
+writing entry points to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/entry_points.txt
+writing requirements to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/requires.txt
+writing top-level names to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/top_level.txt
+reading manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+writing manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+running build
+running build_py
+running install
+running install_lib
+running install_data
+running install_egg_info
+removing '/home/moonpie/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info' (and everything under it)
+Copying ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info to /home/moonpie/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info
+running install_scripts
+Installing multi_waypoint_navigator script to /home/moonpie/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+Installing unified_navigator script to /home/moonpie/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+Installing waypoint_navigator script to /home/moonpie/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+writing list of installed files to '/home/moonpie/lunar_rover_ws/build/lunar_robot_autonomous/install.log'

@@ -35,11 +35,18 @@ cd /lunar_rover_ws/ArduinoNoROS
 python3 teleop_no_ros.py
 
 ## Teleop (Not integrated into split computer's)
-### Terminal 1
+### Terminal 1 Connect to Arduino
 ros2 run lunar_robot_hardware arduino_motor_controller
 
-### Terminal 2
+### Terminal 2 Keyboard telep
 ros2 run lunar_robot_hardware arduino_teleop
+
+## Terminal 2 Controler Start
+ros2 run joy joy_node
+
+## Terminal 3 Controler Teleop
+ros2 run lunar_robot_hardware controller_teleop
+
 
 ### Terminal 2 for point click navigation
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py

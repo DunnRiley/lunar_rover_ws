@@ -1,7 +1,7 @@
 Metadata-Version: 2.1
 Name: lunar-robot-hardware
 Version: 0.0.1
-Summary: Lunar robot hardware interface
-Maintainer: your_name
-Maintainer-email: your_email@example.com
+Summary: Lunar robot Arduino hardware interface
+Maintainer: moonpie
+Maintainer-email: you@example.com
 License: MIT

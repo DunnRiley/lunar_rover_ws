@@ -1,278 +1,252 @@
 #!/usr/bin/env python3
 """
 ROS2 Motor Controller Node - Arduino Hardware Bridge
-Uses the modern Arduino hardware interface
-Compatible with point-click navigation and teleop
+Protocol: [0xAA][Device][Speed][Direction][0x55]
+
+Topics:
+  /cmd_vel          geometry_msgs/Twist   Drive motors
+  /actuator_cmd     std_msgs/Int8         Actuators  (+1=extend, -1=retract, 0=stop)
+  /emergency_stop   std_msgs/Bool         Kill all
 """
 
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool, String
-from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool, String, Int8
+import serial
 import time
 
-# Import our new Arduino hardware interface
-from arduino_hardware_interface import ArduinoRover, create_arduino_rover
+# ── Device IDs ───────────────────────────────────────────────────────────
+FL   = 0x01
+FR   = 0x02
+BL   = 0x03
+BR   = 0x04
+AL   = 0xD4   # Left  actuator
+AR   = 0xF7   # Right actuator
+ACT  = 0x08   # Both actuators together
+KILL = 0xFF
+
+START = 0xAA
+END   = 0x55
 
 
 class ArduinoMotorController(Node):
-    """
-    ROS2 node that bridges cmd_vel commands to Arduino hardware
-    Drop-in replacement for old motor controller
-    """
-    
+
     def __init__(self):
         super().__init__('arduino_motor_controller')
-        
-        # ========== PARAMETERS ==========
-        self.declare_parameter('arduino_port', '/dev/ttyACM0')
-        self.declare_parameter('baudrate', 115200)
-        self.declare_parameter('cmd_vel_timeout', 0.5)
-        self.declare_parameter('deadzone_linear', 0.05)
+
+        # ── Parameters ───────────────────────────────────────────────────
+        self.declare_parameter('arduino_port',    '/dev/ttyACM0')
+        self.declare_parameter('baudrate',         115200)
+        self.declare_parameter('cmd_vel_timeout',  0.5)
+        self.declare_parameter('deadzone_linear',  0.05)
         self.declare_parameter('deadzone_angular', 0.05)
-        self.declare_parameter('max_motor_speed', 127)
-        self.declare_parameter('watchdog_rate', 10.0)  # Hz
-        
-        # Get parameters
-        arduino_port = self.get_parameter('arduino_port').value
-        baudrate = self.get_parameter('baudrate').value
+        self.declare_parameter('max_motor_speed',  200)
+
+        self.arduino_port    = self.get_parameter('arduino_port').value
+        self.baudrate        = self.get_parameter('baudrate').value
         self.cmd_vel_timeout = self.get_parameter('cmd_vel_timeout').value
         self.deadzone_linear = self.get_parameter('deadzone_linear').value
-        self.deadzone_angular = self.get_parameter('deadzone_angular').value
-        self.max_motor_speed = self.get_parameter('max_motor_speed').value
-        watchdog_rate = self.get_parameter('watchdog_rate').value
-        
-        # ========== HARDWARE INTERFACE ==========
-        self.get_logger().info(f'Connecting to Arduino on {arduino_port}...')
-        self.rover = create_arduino_rover(port=arduino_port, baudrate=baudrate)
-        
-        if not self.rover.is_connected:
-            self.get_logger().error('Failed to connect to Arduino!')
-            self.get_logger().error('Check USB connection and port mapping')
-            raise RuntimeError('Arduino connection failed')
-        
-        # ========== STATE ==========
-        self.last_cmd_vel_time = self.get_clock().now()
-        self.current_linear = 0.0
-        self.current_angular = 0.0
-        self.is_emergency_stopped = False
-        
-        # ========== SUBSCRIBERS ==========
-        self.cmd_vel_sub = self.create_subscription(
-            Twist,
-            '/cmd_vel',
-            self.cmd_vel_callback,
-            10
-        )
-        
-        self.emergency_stop_sub = self.create_subscription(
-            Bool,
-            '/emergency_stop',
-            self.emergency_stop_callback,
-            10
-        )
-        
-        # ========== PUBLISHERS ==========
-        self.status_pub = self.create_publisher(
-            String,
-            '/motor_status',
-            10
-        )
-        
-        # Publish joint states for RViz visualization
-        self.joint_state_pub = self.create_publisher(
-            JointState,
-            '/joint_states',
-            10
-        )
-        
-        # ========== TIMERS ==========
-        # Watchdog timer - stops motors if no cmd_vel received
-        self.watchdog_timer = self.create_timer(
-            1.0 / watchdog_rate,
-            self.watchdog_callback
-        )
-        
-        # Status publisher
-        self.status_timer = self.create_timer(
-            1.0,  # 1 Hz
-            self.publish_status
-        )
-        
-        # Joint state publisher (for RViz)
-        self.joint_state_timer = self.create_timer(
-            0.05,  # 20 Hz
-            self.publish_joint_states
-        )
-        
-        self.get_logger().info('='*60)
-        self.get_logger().info('Arduino Motor Controller Ready!')
-        self.get_logger().info('='*60)
-        self.get_logger().info(f'Arduino Port: {arduino_port}')
-        self.get_logger().info(f'Baudrate: {baudrate}')
-        self.get_logger().info(f'Max Motor Speed: {self.max_motor_speed}')
-        self.get_logger().info('='*60)
-        self.get_logger().info('Subscribed to: /cmd_vel, /emergency_stop')
-        self.get_logger().info('Publishing to: /motor_status, /joint_states')
-        self.get_logger().info('Waiting for commands...')
-    
-    def cmd_vel_callback(self, msg: Twist):
-        """
-        Handle incoming cmd_vel commands
-        Compatible with point-click navigation and teleop
-        """
-        if self.is_emergency_stopped:
-            self.get_logger().warn(
-                '⚠️ Emergency stop active - ignoring cmd_vel',
-                throttle_duration_sec=2.0
-            )
+        self.deadzone_ang    = self.get_parameter('deadzone_angular').value
+        self.max_speed       = self.get_parameter('max_motor_speed').value
+
+        # ── Serial connection ─────────────────────────────────────────────
+        self.ser = None
+        self._connect()
+
+        # ── State ────────────────────────────────────────────────────────
+        self.last_cmd_time    = self.get_clock().now()
+        self.last_act_time    = self.get_clock().now()
+        self.current_linear   = 0.0
+        self.current_angular  = 0.0
+        self.emergency        = False
+
+        # ── Subscribers ──────────────────────────────────────────────────
+        self.create_subscription(Twist, '/cmd_vel',        self._cmd_vel_cb,  10)
+        self.create_subscription(Bool,  '/emergency_stop', self._estop_cb,    10)
+        self.create_subscription(Int8,  '/actuator_cmd',   self._actuator_cb, 10)
+
+        # ── Publishers ───────────────────────────────────────────────────
+        self.status_pub = self.create_publisher(String, '/motor_status', 10)
+
+        # ── Timers ───────────────────────────────────────────────────────
+        self.create_timer(0.1, self._watchdog)   # 10 Hz
+        self.create_timer(1.0, self._status_cb)  #  1 Hz
+
+        self.get_logger().info('='*50)
+        self.get_logger().info('Arduino Motor Controller Ready')
+        self.get_logger().info(f'Port: {self.arduino_port} @ {self.baudrate}')
+        self.get_logger().info('Topics: /cmd_vel  /actuator_cmd  /emergency_stop')
+        self.get_logger().info('='*50)
+
+    # ── Serial helpers ────────────────────────────────────────────────────
+
+    def _connect(self):
+        try:
+            self.ser = serial.Serial(
+                self.arduino_port, self.baudrate, timeout=1.0)
+            time.sleep(2.0)
+            self.ser.reset_input_buffer()
+            self.get_logger().info(f'Connected to Arduino on {self.arduino_port}')
+        except serial.SerialException as e:
+            self.get_logger().error(f'Cannot open {self.arduino_port}: {e}')
+            self.ser = None
+
+    @property
+    def is_connected(self):
+        return self.ser is not None and self.ser.is_open
+
+    def _send(self, device: int, speed: int, direction: int):
+        """Send [0xAA][device][speed][direction][0x55]"""
+        if not self.is_connected:
             return
-        
-        self.last_cmd_vel_time = self.get_clock().now()
-        
-        # Extract velocities
-        self.current_linear = msg.linear.x
-        self.current_angular = msg.angular.z
-        
-        # Send to Arduino using the new interface
-        self.rover.chassis.process_cmd_vel(
-            self.current_linear,
-            self.current_angular,
-            self.deadzone_linear,
-            self.deadzone_angular,
-            self.max_motor_speed
-        )
-        
-        # Log (throttled)
-        if abs(self.current_linear) > 0.01 or abs(self.current_angular) > 0.01:
-            self.get_logger().info(
-                f'cmd_vel: linear={self.current_linear:.2f}, '
-                f'angular={self.current_angular:.2f}',
-                throttle_duration_sec=1.0
-            )
-    
-    def emergency_stop_callback(self, msg: Bool):
-        """Handle emergency stop commands"""
-        if msg.data and not self.is_emergency_stopped:
-            self.get_logger().error('🚨 EMERGENCY STOP ACTIVATED!')
-            self.rover.emergency_stop_all()
-            self.is_emergency_stopped = True
-        elif not msg.data and self.is_emergency_stopped:
-            self.get_logger().info('Emergency stop cleared')
-            self.rover.chassis.clear_emergency_stop()
-            self.is_emergency_stopped = False
-    
-    def watchdog_callback(self):
-        """
-        Watchdog timer - stops motors if no cmd_vel received
-        Safety feature to prevent runaway
-        """
-        if self.is_emergency_stopped:
+        try:
+            self.ser.write(bytes([START, device,
+                                  speed & 0xFF, direction & 0xFF, END]))
+        except serial.SerialException as e:
+            self.get_logger().error(f'Serial write error: {e}')
+
+    def _stop_drive(self):
+        for dev in [FL, FR, BL, BR]:
+            self._send(dev, 0, 0)
+
+    def _stop_actuators(self):
+        self._send(ACT, 0, 0)
+
+    def _stop_all(self):
+        self._send(KILL, 0, 0)
+
+    # ── Drive helper ──────────────────────────────────────────────────────
+
+    def _set_drive(self, left: float, right: float):
+        """left / right in range [-1.0, 1.0]"""
+        def to_bytes(v):
+            spd = min(int(abs(v) * self.max_speed), 255)
+            direction = 0x00 if v >= 0 else 0x01
+            return spd, direction
+
+        ls, ld = to_bytes(left)
+        rs, rd = to_bytes(right)
+        self._send(FL, ls, ld)
+        self._send(BL, ls, ld)
+        self._send(FR, rs, rd)
+        self._send(BR, rs, rd)
+
+    # ── Callbacks ─────────────────────────────────────────────────────────
+
+    def _cmd_vel_cb(self, msg: Twist):
+        if self.emergency:
             return
-        
-        elapsed = (self.get_clock().now() - self.last_cmd_vel_time).nanoseconds / 1e9
-        
-        if elapsed > self.cmd_vel_timeout:
-            # No command received recently - stop motors
-            if self.current_linear != 0.0 or self.current_angular != 0.0:
-                self.get_logger().warn(
-                    f'⚠️ No cmd_vel for {elapsed:.2f}s - stopping motors',
-                    throttle_duration_sec=2.0
-                )
-                self.rover.chassis.stop()
-                self.current_linear = 0.0
-                self.current_angular = 0.0
-    
-    def publish_status(self):
-        """Publish motor controller status"""
-        status_msg = String()
-        
-        if self.is_emergency_stopped:
-            status = 'EMERGENCY_STOP'
-        elif self.rover.is_connected:
-            if abs(self.current_linear) > 0.01 or abs(self.current_angular) > 0.01:
-                status = 'MOVING'
-            else:
-                status = 'IDLE'
+
+        self.last_cmd_time = self.get_clock().now()
+        lin = msg.linear.x
+        ang = msg.angular.z
+
+        if abs(lin) < self.deadzone_linear:  lin = 0.0
+        if abs(ang) < self.deadzone_ang:     ang = 0.0
+
+        self.current_linear  = lin
+        self.current_angular = ang
+
+        if abs(lin) < 0.01 and abs(ang) < 0.01:
+            self._stop_drive()
+            return
+
+        # Differential drive mixing
+        left  = lin - ang
+        right = lin + ang
+        max_val = max(abs(left), abs(right), 1.0)
+        self._set_drive(left / max_val, right / max_val)
+
+        self.get_logger().info(
+            f'Drive  lin={lin:.2f}  ang={ang:.2f}',
+            throttle_duration_sec=0.5)
+
+    def _actuator_cb(self, msg: Int8):
+        """
+        +1 = extend   (direction 0x00, forward)
+        -1 = retract  (direction 0x01, backward)
+         0 = stop
+        """
+        if self.emergency:
+            return
+
+        self.last_act_time = self.get_clock().now()
+        val = msg.data
+        spd = int(abs(val) * self.max_speed) if val != 0 else 0
+        spd = min(spd, 255)
+
+        if val > 0:
+            self._send(ACT, spd, 0x00)
+            self.get_logger().info('Actuators: EXTEND',
+                                   throttle_duration_sec=0.5)
+        elif val < 0:
+            self._send(ACT, spd, 0x01)
+            self.get_logger().info('Actuators: RETRACT',
+                                   throttle_duration_sec=0.5)
         else:
-            status = 'ERROR_DISCONNECTED'
-        
-        status_msg.data = status
-        self.status_pub.publish(status_msg)
-    
-    def publish_joint_states(self):
-        """
-        Publish joint states for RViz visualization
-        Estimated states based on cmd_vel (no encoders yet)
-        """
-        msg = JointState()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        
-        # Wheel joint names (must match URDF)
-        msg.name = [
-            'front_left_wheel_joint',
-            'front_right_wheel_joint',
-            'rear_left_wheel_joint',
-            'rear_right_wheel_joint'
-        ]
-        
-        # Estimate wheel velocities from cmd_vel
-        # This is just for visualization - real implementation needs encoders
-        wheel_radius = 0.1  # meters (adjust to match your rover)
-        estimated_left_vel = (self.current_linear - self.current_angular) / wheel_radius
-        estimated_right_vel = (self.current_linear + self.current_angular) / wheel_radius
-        
-        msg.position = [0.0] * 4  # Would need encoder feedback
-        msg.velocity = [
-            estimated_left_vel,   # front left
-            estimated_right_vel,  # front right
-            estimated_left_vel,   # rear left
-            estimated_right_vel   # rear right
-        ]
-        msg.effort = [0.0] * 4
-        
-        self.joint_state_pub.publish(msg)
-    
-    def shutdown(self):
-        """Clean shutdown"""
-        self.get_logger().info('Shutting down motor controller...')
-        self.rover.chassis.stop()
-        self.rover.actuators.stop()
-        self.rover.disconnect()
-        self.get_logger().info('Motor controller shutdown complete')
-    
+            self._stop_actuators()
+
+    def _estop_cb(self, msg: Bool):
+        if msg.data and not self.emergency:
+            self.emergency = True
+            self._stop_all()
+            self.get_logger().error('EMERGENCY STOP')
+        elif not msg.data and self.emergency:
+            self.emergency = False
+            self.get_logger().info('Emergency stop cleared')
+
+    def _watchdog(self):
+        if self.emergency:
+            return
+
+        now = self.get_clock().now()
+
+        # Stop drive if no cmd_vel recently
+        drive_elapsed = (now - self.last_cmd_time).nanoseconds / 1e9
+        if drive_elapsed > self.cmd_vel_timeout:
+            if abs(self.current_linear) > 0.01 or abs(self.current_angular) > 0.01:
+                self.get_logger().warn('Watchdog: stopping drive',
+                                       throttle_duration_sec=2.0)
+            self._stop_drive()
+            self.current_linear  = 0.0
+            self.current_angular = 0.0
+
+        # Stop actuators if no actuator_cmd recently
+        act_elapsed = (now - self.last_act_time).nanoseconds / 1e9
+        if act_elapsed > self.cmd_vel_timeout:
+            self._stop_actuators()
+
+    def _status_cb(self):
+        msg = String()
+        if self.emergency:
+            msg.data = 'EMERGENCY_STOP'
+        elif not self.is_connected:
+            msg.data = 'DISCONNECTED'
+        elif abs(self.current_linear) > 0.01 or abs(self.current_angular) > 0.01:
+            msg.data = 'MOVING'
+        else:
+            msg.data = 'IDLE'
+        self.status_pub.publish(msg)
+
     def destroy_node(self):
-        """Override to ensure clean shutdown"""
-        self.shutdown()
+        self.get_logger().info('Shutting down — stopping all motors')
+        self._stop_all()
+        if self.is_connected:
+            self.ser.close()
         super().destroy_node()
 
 
 def main(args=None):
     rclpy.init(args=args)
-    
     try:
-        controller = ArduinoMotorController()
-        
-        # Run the node
-        rclpy.spin(controller)
-    
+        node = ArduinoMotorController()
+        rclpy.spin(node)
     except KeyboardInterrupt:
-        controller.get_logger().info('Interrupted by user')
-    
-    except Exception as e:
-        if 'controller' in locals():
-            controller.get_logger().error(f'Fatal error: {e}')
-        else:
-            print(f'Fatal error during initialization: {e}')
-            print('\nTroubleshooting:')
-            print('1. Check Arduino is connected: ls /dev/ttyACM*')
-            print('2. Check Arduino has correct firmware loaded')
-            print('3. Check USB cable and connection')
-    
+        pass
     finally:
-        if 'controller' in locals():
-            controller.destroy_node()
+        if 'node' in locals():
+            node.destroy_node()
         rclpy.shutdown()
 
 

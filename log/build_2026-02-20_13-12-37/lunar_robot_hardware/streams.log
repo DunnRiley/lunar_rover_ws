@@ -1,0 +1,25 @@
+[1.129s] Invoking command in '/home/moonpie/lunar_rover_ws/src/lunar_robot_hardware': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_hardware build --build-base /home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/build install --record /home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/install.log --single-version-externally-managed install_data
+[1.437s] running egg_info
+[1.461s] writing ../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/PKG-INFO
+[1.461s] writing dependency_links to ../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/dependency_links.txt
+[1.462s] writing entry points to ../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/entry_points.txt
+[1.462s] writing requirements to ../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/requires.txt
+[1.462s] writing top-level names to ../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/top_level.txt
+[1.512s] reading manifest file '../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/SOURCES.txt'
+[1.513s] writing manifest file '../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info/SOURCES.txt'
+[1.514s] running build
+[1.514s] running build_py
+[1.514s] running install
+[1.526s] running install_lib
+[1.551s] running install_data
+[1.551s] running install_egg_info
+[1.595s] removing '/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware-0.0.1-py3.12.egg-info' (and everything under it)
+[1.595s] Copying ../../build/lunar_robot_hardware/lunar_robot_hardware.egg-info to /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages/lunar_robot_hardware-0.0.1-py3.12.egg-info
+[1.597s] running install_scripts
+[1.774s] Installing arduino_motor_controller script to /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware
+[1.774s] Installing arduino_teleop script to /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware
+[1.774s] Installing controller_teleop script to /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware
+[1.774s] Installing motor_controller_node script to /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware
+[1.774s] Installing simple_odom_publisher script to /home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/lunar_robot_hardware
+[1.775s] writing list of installed files to '/home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/install.log'
+[1.803s] Invoked command in '/home/moonpie/lunar_rover_ws/src/lunar_robot_hardware' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/moonpie/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_hardware build --build-base /home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/build install --record /home/moonpie/lunar_rover_ws/build/lunar_robot_hardware/install.log --single-version-externally-managed install_data

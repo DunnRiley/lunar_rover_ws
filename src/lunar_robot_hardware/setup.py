@@ -24,8 +24,11 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'motor_controller_node = lunar_robot_hardware.motor_controller:main',
+            'simple_odom_publisher = lunar_robot_hardware.simple_odom:main',
             'arduino_motor_controller = lunar_robot_hardware.arduino_motor_controller:main',
             'arduino_teleop = lunar_robot_hardware.arduino_teleop:main',
+            'controller_teleop = lunar_robot_hardware.arduino_teleop_controller:main',
         ],
     },
 )

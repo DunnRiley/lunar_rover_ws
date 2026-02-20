@@ -1,233 +1,194 @@
 #!/usr/bin/env python3
 """
-Hold-to-Drive Teleop for Arduino-based Lunar Rover
-Drives only while keys are held down, stops when released
+Keyboard Teleop for Lunar Rover (ROS2)
+Uses curses for reliable hold-to-move behaviour.
+
+Controls:
+  W / S      Forward / Backward
+  A / D      Pivot Left / Pivot Right
+  O / L      Actuators Extend / Retract
+  Z / C      Speed UP / DOWN  (step 0.05)
+  SPACE      Toggle Emergency Stop
+  Q          Quit
 """
 
+import curses
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool
-import sys
-import termios
-import tty
-import select
-import threading
+from std_msgs.msg import Bool, Int8
 
 
-class HoldToDriveTeleop(Node):
+SPEED_MIN     = 0.10
+SPEED_MAX     = 1.00
+SPEED_STEP    = 0.05
+SPEED_START   = 0.50
+ANGULAR_SCALE = 1.2
+
+
+class KeyboardTeleop(Node):
+
     def __init__(self):
-        super().__init__('arduino_teleop_hold')
-        
-        # Publishers
-        self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
-        self.estop_pub = self.create_publisher(Bool, 'emergency_stop', 10)
-        
-        # Try to connect directly to Arduino for actuator control
-        try:
-            import sys
-            import os
-            # Add the module path
-            sys.path.append(os.path.expanduser('~/lunar_rover_ws/src/lunar_robot_hardware/lunar_robot_hardware'))
-            from arduino_hardware_interface import create_arduino_rover
-            
-            self.get_logger().info('Attempting to connect to Arduino for actuator control...')
-            self.arduino = create_arduino_rover('/dev/ttyACM0', 115200)
-            self.has_arduino = True
-            self.get_logger().info('Arduino connection established')
-        except Exception as e:
-            self.get_logger().warn(f'Could not connect to Arduino: {e}')
-            self.get_logger().warn('Actuator controls (Q/E/R) will not work')
-            self.arduino = None
-            self.has_arduino = False
-        
-        # Speed settings (m/s and rad/s)
-        self.linear_speed = 0.5
-        self.angular_speed = 0.8
-        self.actuator_speed = 100  # -127 to 127
-        
-        # Current key states
-        self.active_keys = set()
-        self.key_lock = threading.Lock()
-        
-        # Terminal settings
-        self.settings = None
-        
-        # Control loop timer (50Hz for smooth control)
-        self.timer = self.create_timer(0.02, self.control_loop)
-        
-        self.print_instructions()
-    
-    def print_instructions(self):
-        print("\n" + "="*60)
-        print("HOLD-TO-DRIVE TELEOP - Arduino Lunar Rover")
-        print("="*60)
-        print("\nDRIVE CONTROLS (hold key down):")
-        print("  W - Drive forward")
-        print("  S - Drive backward")
-        print("  A - Turn left")
-        print("  D - Turn right")
-        print("\nACTUATOR CONTROLS (hold key down):")
-        print("  Q - Extend actuators")
-        print("  E - Retract actuators")
-        print("\nSAFETY:")
-        print("  SPACE - Emergency stop ALL systems")
-        print("\nOTHER:")
-        print("  H - Show this help")
-        print("  Ctrl+C - Quit")
-        print("\nMotors will STOP when you release the keys")
-        print("="*60 + "\n")
-    
-    def control_loop(self):
-        """Main control loop - runs at 50Hz"""
-        with self.key_lock:
-            current_keys = self.active_keys.copy()
-        
-        # Initialize twist message
-        twist = Twist()
-        
-        # Process drive keys
-        if 'w' in current_keys:
-            twist.linear.x = self.linear_speed
-        elif 's' in current_keys:
-            twist.linear.x = -self.linear_speed
-        
-        if 'a' in current_keys:
-            twist.angular.z = self.angular_speed
-        elif 'd' in current_keys:
-            twist.angular.z = -self.angular_speed
-        
-        # Publish drive command
-        self.cmd_vel_pub.publish(twist)
-        
-        # Process actuator keys (direct Arduino control)
-        if self.has_arduino:
-            if 'q' in current_keys:
-                # Extend actuators
-                try:
-                    self.arduino.actuators.extend(self.actuator_speed)
-                except:
-                    pass
-            elif 'e' in current_keys:
-                # Retract actuators
-                try:
-                    self.arduino.actuators.retract(self.actuator_speed)
-                except:
-                    pass
-            else:
-                # Stop actuators when no key pressed
-                try:
-                    self.arduino.actuators.stop()
-                except:
-                    pass
-    
-    def process_key(self, key):
-        """Process individual key press"""
-        if key == ' ':  # Space - Emergency stop
-            self.emergency_stop()
-        elif key == 'h':  # Help
-            self.print_instructions()
-        elif key in ['w', 's', 'a', 'd', 'q', 'e']:
-            # Add to active keys
-            with self.key_lock:
-                self.active_keys.add(key)
-    
-    def clear_key(self, key):
-        """Clear key from active set when released"""
-        with self.key_lock:
-            self.active_keys.discard(key)
-    
-    def emergency_stop(self):
-        """Emergency stop all systems"""
-        self.get_logger().warn('EMERGENCY STOP ACTIVATED!')
-        
-        # Stop drive motors
-        twist = Twist()
-        self.cmd_vel_pub.publish(twist)
-        
-        # Stop actuators
-        if self.has_arduino:
-            try:
-                self.arduino.actuators.stop()
-            except:
-                pass
-        
-        # Publish emergency stop message
-        estop_msg = Bool()
-        estop_msg.data = True
-        self.estop_pub.publish(estop_msg)
-        
-        # Clear all active keys
-        with self.key_lock:
-            self.active_keys.clear()
-        
-        print("\n*** ALL SYSTEMS STOPPED ***\n")
-    
-    def run(self):
-        """Main run loop - handles keyboard input"""
-        # Save terminal settings
-        self.settings = termios.tcgetattr(sys.stdin)
-        
-        try:
-            # Set terminal to raw mode
-            tty.setraw(sys.stdin.fileno())
-            
-            print("Ready! Press keys to drive (release to stop)...\n")
-            
-            while rclpy.ok():
-                # Check if key is available
-                if select.select([sys.stdin], [], [], 0)[0]:
-                    key = sys.stdin.read(1).lower()
-                    
-                    # Check for Ctrl+C
-                    if ord(key) == 3:  # Ctrl+C
-                        break
-                    
-                    self.process_key(key)
-                
-                # Spin ROS2 node
-                rclpy.spin_once(self, timeout_sec=0)
-                
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.cleanup()
-    
-    def cleanup(self):
-        """Clean shutdown"""
-        print("\n\nShutting down...")
-        
-        # Stop all motors
-        twist = Twist()
-        self.cmd_vel_pub.publish(twist)
-        
-        # Stop actuators
-        if self.has_arduino:
-            try:
-                self.arduino.actuators.stop()
-                self.arduino.close()
-            except:
-                pass
-        
-        # Restore terminal settings
-        if self.settings:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.settings)
-        
-        print("Teleop stopped safely.")
+        super().__init__('keyboard_teleop')
+        self.cmd_pub   = self.create_publisher(Twist, '/cmd_vel',        10)
+        self.estop_pub = self.create_publisher(Bool,  '/emergency_stop', 10)
+        self.act_pub   = self.create_publisher(Int8,  '/actuator_cmd',   10)
+
+    def publish_drive(self, linear: float, angular: float):
+        t = Twist()
+        t.linear.x  = linear
+        t.angular.z = angular
+        self.cmd_pub.publish(t)
+
+    def publish_actuator(self, val: int):
+        """val: +1 extend, -1 retract, 0 stop"""
+        m = Int8()
+        m.data = val
+        self.act_pub.publish(m)
+
+    def publish_estop(self, state: bool):
+        m = Bool()
+        m.data = state
+        self.estop_pub.publish(m)
 
 
-def main(args=None):
-    rclpy.init(args=args)
-    
-    teleop = HoldToDriveTeleop()
-    
+def draw_ui(stdscr, speed: float, status: str, emergency: bool):
+    stdscr.erase()
+    _, w = stdscr.getmaxyx()
+
+    title = 'LUNAR ROVER  Keyboard Teleop'
+    stdscr.addstr(0, max(0, (w - len(title)) // 2), title, curses.A_BOLD)
+
+    stdscr.addstr(2,  2, 'W / S      Forward / Backward')
+    stdscr.addstr(3,  2, 'A / D      Pivot Left / Pivot Right')
+    stdscr.addstr(4,  2, 'O / L      Actuators Extend / Retract')
+    stdscr.addstr(5,  2, 'Z / C      Speed UP / DOWN  (step 0.05)')
+    stdscr.addstr(6,  2, 'SPACE      Toggle Emergency Stop')
+    stdscr.addstr(7,  2, 'Q          Quit')
+
+    stdscr.addstr(9,  2, f'Speed : {speed:.2f}', curses.A_BOLD)
+
+    if emergency:
+        stdscr.addstr(10, 2, '*** EMERGENCY STOP ACTIVE ***',
+                      curses.A_BOLD | curses.color_pair(1))
+    else:
+        stdscr.addstr(10, 2, f'Status: {status:<30}')
+
+    stdscr.addstr(12, 2, 'Hold a key to move  release to stop', curses.A_DIM)
+    stdscr.refresh()
+
+
+def main_curses(stdscr):
+    curses.curs_set(0)
+    stdscr.nodelay(True)   # non-blocking — returns -1 when no key held
+    stdscr.timeout(50)     # wake every 50 ms to publish stop
+
+    curses.start_color()
+    curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+
+    rclpy.init()
+    node = KeyboardTeleop()
+
+    speed     = SPEED_START
+    emergency = False
+    status    = 'Idle'
+
+    draw_ui(stdscr, speed, status, emergency)
+
     try:
-        teleop.run()
-    except Exception as e:
-        print(f"\nError: {e}")
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0)
+            key = stdscr.getch()
+
+            # ── No key held → send stop for both drive and actuators ──────
+            if key == -1:
+                if not emergency:
+                    node.publish_drive(0.0, 0.0)
+                    node.publish_actuator(0)
+                    status = 'Idle'
+                draw_ui(stdscr, speed, status, emergency)
+                continue
+
+            ch = chr(key).lower() if 0 < key < 256 else ''
+
+            # ── Quit ─────────────────────────────────────────────────────
+            if ch == 'q':
+                break
+
+            # ── Emergency stop ────────────────────────────────────────────
+            if ch == ' ':
+                emergency = not emergency
+                node.publish_estop(emergency)
+                node.publish_drive(0.0, 0.0)
+                node.publish_actuator(0)
+                status = 'EMERGENCY STOP' if emergency else 'Idle'
+                draw_ui(stdscr, speed, status, emergency)
+                continue
+
+            if emergency:
+                draw_ui(stdscr, speed, status, emergency)
+                continue
+
+            # ── Speed control ─────────────────────────────────────────────
+            if ch == 'z':
+                speed = round(min(SPEED_MAX, speed + SPEED_STEP), 2)
+                status = f'Speed up  {speed:.2f}'
+                draw_ui(stdscr, speed, status, emergency)
+                continue
+
+            if ch == 'c':
+                speed = round(max(SPEED_MIN, speed - SPEED_STEP), 2)
+                status = f'Speed down  {speed:.2f}'
+                draw_ui(stdscr, speed, status, emergency)
+                continue
+
+            # ── Drive keys ────────────────────────────────────────────────
+            # Always stop actuators when driving
+            node.publish_actuator(0)
+
+            if ch == 'a':
+                node.publish_drive(speed, 0.0)
+                status = 'Forward'
+
+            elif ch == 'd':
+                node.publish_drive(-speed, 0.0)
+                status = 'Backward'
+
+            elif ch == 'w':
+                node.publish_drive(0.0,  speed * ANGULAR_SCALE)
+                status = 'Pivot Left'
+
+            elif ch == 's':
+                node.publish_drive(0.0, -speed * ANGULAR_SCALE)
+                status = 'Pivot Right'
+
+            # ── Actuator keys ─────────────────────────────────────────────
+            # Stop drive when using actuators
+            elif ch == 'o':
+                node.publish_drive(0.0, 0.0)
+                node.publish_actuator(1)    # +1 = extend
+                status = 'Actuators Extend'
+
+            elif ch == 'l':
+                node.publish_drive(0.0, 0.0)
+                node.publish_actuator(-1)   # -1 = retract
+                status = 'Actuators Retract'
+
+            draw_ui(stdscr, speed, status, emergency)
+
     finally:
-        teleop.destroy_node()
+        try:
+            node.publish_drive(0.0, 0.0)
+            node.publish_actuator(0)
+            node.publish_estop(False)
+        except Exception:
+            pass
+        node.destroy_node()
         rclpy.shutdown()
+
+
+def main():
+    curses.wrapper(main_curses)
 
 
 if __name__ == '__main__':
