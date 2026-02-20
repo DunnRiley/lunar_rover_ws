@@ -57,103 +57,72 @@ class TeleopPublisher(QThread):
 
     def __init__(self):
         super().__init__()
-        self._lock = threading.Lock()
+        self._lock    = threading.Lock()
         self._running = False
-        self._linear  = 0.0
-        self._angular  = 0.0
-        self._speed    = 0.5   # m/s scale
-        self._node     = None
-        self._pub      = None
+        self._speed   = 0.5
+        self._node    = None
+        self._pub     = None
+        self._actuator_pub = None
 
-        # Keyboard state
-        self._keys: set = set()
-        self._actuator_pub  = None   # publishes /actuator_cmd
-        self._actuator_queue = queue.Queue()  # thread-safe command delivery
+        # Event queue: each item is (msg_type, payload)
+        # msg_type 'twist' → payload is (linear, angular)
+        # msg_type 'act'   → payload is int  (+1/-1/0)
+        self._queue = queue.Queue()
 
     def set_speed(self, v: float):
         with self._lock:
             self._speed = max(0.05, min(1.0, v))
 
-    def key_press(self, key: Qt.Key):
-        self._keys.add(key)
+    # ── Called by key/joystick events — each fires ONE publish ───────────
 
-    def key_release(self, key: Qt.Key):
-        self._keys.discard(key)
+    def drive(self, linear: float, angular: float):
+        """Publish a single Twist. Call on key-press and key-release."""
+        self._queue.put(('twist', (linear, angular)))
+
+    def send_actuator(self, value: int):
+        """Publish a single Int8. +1=extend, -1=retract, 0=stop."""
+        self._queue.put(('act', value))
 
     def emergency_stop(self):
-        self._keys.clear()
-        with self._lock:
-            self._linear = 0.0
-            self._angular = 0.0
-
-    def set_velocity(self, linear: float, angular: float):
-        """Direct velocity set (used by virtual joystick)."""
-        with self._lock:
-            self._linear  = linear
-            self._angular = angular
-
-    def _compute_from_keys(self):
-        lin = ang = 0.0
-        spd = self._speed
-        with self._lock:
-            s = self._speed
-        if Qt.Key_W in self._keys: ang  =  s * 1.5   # W → forward (was linear, now angular)
-        if Qt.Key_S in self._keys: ang  = -s * 1.5   # S → backward
-        if Qt.Key_A in self._keys: lin  =  s          # A → left (was angular, now linear)
-        if Qt.Key_D in self._keys: lin  = -s          # D → right
-        with self._lock:
-            self._linear  = lin
-            self._angular = ang
+        self._queue.put(('twist', (0.0, 0.0)))
+        self._queue.put(('act', 0))
 
     def run(self):
         if not ROS_AVAILABLE:
             self.status_changed.emit("ROS2 not available — install rclpy")
             return
-
         try:
             if not rclpy.ok():
                 rclpy.init()
             self._node = rclpy.create_node('rover_laptop_teleop')
-            self._pub  = self._node.create_publisher(Twist, '/cmd_vel', 10)
+            self._pub  = self._node.create_publisher(Twist,   '/cmd_vel',      10)
             self._actuator_pub = self._node.create_publisher(RosInt8, '/actuator_cmd', 10)
             self._running = True
-            self.status_changed.emit("Teleop node running")
+            self.status_changed.emit("Teleop node running  ·  event-driven (no flooding)")
 
-            period = 1.0 / PUBLISH_RATE
             executor = rclpy.executors.SingleThreadedExecutor()
             executor.add_node(self._node)
 
-            next_time = time.monotonic()
             while self._running and rclpy.ok():
-                self._compute_from_keys()
+                try:
+                    msg_type, payload = self._queue.get(timeout=0.05)
+                except queue.Empty:
+                    executor.spin_once(timeout_sec=0.0)
+                    continue
 
-                # Publish cmd_vel
-                msg = Twist()
-                with self._lock:
-                    msg.linear.x  = float(self._linear)
-                    msg.angular.z = float(self._angular)
-                self._pub.publish(msg)
+                if msg_type == 'twist':
+                    lin, ang = payload
+                    msg = Twist()
+                    msg.linear.x  = float(lin)
+                    msg.angular.z = float(ang)
+                    self._pub.publish(msg)
 
-                # Drain actuator queue — all pending commands published from ROS thread
-                while True:
-                    try:
-                        act_cmd = self._actuator_queue.get_nowait()
-                        act_msg = RosInt8()
-                        # extend=+1, retract=-1, stop=0  (matches arduino_motor_controller.py)
-                        act_msg.data = {"extend": 1, "retract": -1, "stop": 0}.get(act_cmd, 0)
-                        self._actuator_pub.publish(act_msg)
-                    except queue.Empty:
-                        break
+                elif msg_type == 'act':
+                    amsg = RosInt8()
+                    amsg.data = int(payload)
+                    self._actuator_pub.publish(amsg)
 
                 executor.spin_once(timeout_sec=0.0)
-
-                # Accurate sleep: compensate for processing time to prevent drift/stutter
-                next_time += period
-                sleep_for = next_time - time.monotonic()
-                if sleep_for > 0:
-                    time.sleep(sleep_for)
-                else:
-                    next_time = time.monotonic()  # fallen behind; reset without pile-up
 
         except Exception as e:
             self.status_changed.emit(f"Teleop error: {e}")
@@ -165,14 +134,11 @@ class TeleopPublisher(QThread):
                 except Exception:
                     pass
 
-    def send_actuator(self, command: str):
-        """Queue an actuator command for the ROS thread to publish safely."""
-        self._actuator_queue.put(command)
-
     def stop(self):
-        self._running = False
         self.emergency_stop()
+        self._running = False
         self.quit()
+        self.wait(2000)
         self.wait(2000)
 
 
@@ -650,13 +616,13 @@ class MissionControl(QWidget):
         abtn_row = QHBoxLayout()
 
         self.act_extend_btn = self._make_btn("▲  EXTEND  [P]", "#1a2820", "#2a6040", "#40c070")
-        self.act_extend_btn.pressed.connect(lambda: self._actuator_cmd("extend"))
-        self.act_extend_btn.released.connect(lambda: self._actuator_cmd("stop"))
+        self.act_extend_btn.pressed.connect(lambda: self._actuator_cmd(1))
+        self.act_extend_btn.released.connect(lambda: self._actuator_cmd(0))
         abtn_row.addWidget(self.act_extend_btn)
 
         self.act_retract_btn = self._make_btn("▼  RETRACT  [L]", "#281a1a", "#602a2a", "#c04040")
-        self.act_retract_btn.pressed.connect(lambda: self._actuator_cmd("retract"))
-        self.act_retract_btn.released.connect(lambda: self._actuator_cmd("stop"))
+        self.act_retract_btn.pressed.connect(lambda: self._actuator_cmd(-1))
+        self.act_retract_btn.released.connect(lambda: self._actuator_cmd(0))
         abtn_row.addWidget(self.act_retract_btn)
 
         alayout.addLayout(abtn_row)
@@ -669,11 +635,6 @@ class MissionControl(QWidget):
         right.addStretch()
 
         root.addStretch()
-
-        # ── Velocity update timer ─────────────────────────────────────────
-        self._vel_timer = QTimer()
-        self._vel_timer.timeout.connect(self._update_vel_display)
-        self._vel_timer.start(100)
 
         self._log("Mission Control ready.")
         if not ROS_AVAILABLE:
@@ -862,7 +823,11 @@ class MissionControl(QWidget):
     def _joystick_moved(self, linear: float, angular: float):
         if self._teleop_thread and self._teleop_active:
             spd = self.speed_slider.value() / 100.0
-            self._teleop_thread.set_velocity(linear * spd, angular * spd * 1.5)
+            lin = linear  * spd
+            ang = angular * spd * 1.5
+            self._teleop_thread.drive(lin, ang)
+            self.vel_lin.setText(f"{lin:+.2f} m/s")
+            self.vel_ang.setText(f"{ang:+.2f} r/s")
 
     def _speed_changed(self, val):
         spd = val / 100.0
@@ -870,9 +835,11 @@ class MissionControl(QWidget):
         if self._teleop_thread:
             self._teleop_thread.set_speed(spd)
 
-    # ── Key events (for WASD) ─────────────────────────────────────────────
+    # ── Key events ────────────────────────────────────────────────────────
     def keyPressEvent(self, e):
-        if not self._teleop_active:
+        if not self._teleop_active or not self._teleop_thread:
+            return
+        if e.isAutoRepeat():   # ignore OS key-repeat — we only want the first press
             return
         key = e.key()
 
@@ -886,53 +853,63 @@ class MissionControl(QWidget):
             self.speed_slider.setValue(max(5, self.speed_slider.value() - 5))
             return
 
-        if key in (Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D):
-            self._teleop_thread.key_press(key)
-            self._update_key_visuals()
-
-        if key == Qt.Key_P:
-            self._actuator_cmd("extend")
-        if key == Qt.Key_L:
-            self._actuator_cmd("retract")
+        spd = self.speed_slider.value() / 100.0
+        if key == Qt.Key_W:
+            self._teleop_thread.drive(0.0,  spd * 1.5)
+            self._set_key_active(Qt.Key_W, True)
+            self._update_vel_display(0.0, spd * 1.5)
+        elif key == Qt.Key_S:
+            self._teleop_thread.drive(0.0, -spd * 1.5)
+            self._set_key_active(Qt.Key_S, True)
+            self._update_vel_display(0.0, -spd * 1.5)
+        elif key == Qt.Key_A:
+            self._teleop_thread.drive( spd, 0.0)
+            self._set_key_active(Qt.Key_A, True)
+            self._update_vel_display(spd, 0.0)
+        elif key == Qt.Key_D:
+            self._teleop_thread.drive(-spd, 0.0)
+            self._set_key_active(Qt.Key_D, True)
+            self._update_vel_display(-spd, 0.0)
+        elif key == Qt.Key_P:
+            self._actuator_cmd(1)
+        elif key == Qt.Key_L:
+            self._actuator_cmd(-1)
 
     def keyReleaseEvent(self, e):
-        key = e.key()
-        if key in (Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D) and self._teleop_thread:
-            self._teleop_thread.key_release(key)
-            self._update_key_visuals()
-        if key in (Qt.Key_P, Qt.Key_L):
-            self._actuator_cmd("stop")
-
-    def _update_key_visuals(self):
+        if e.isAutoRepeat():
+            return
         if not self._teleop_thread:
             return
-        held = self._teleop_thread._keys
-        active_style = "background:#e8a030; color:#000; border:1px solid #e8a030; border-radius:4px; font-size:12px; font-weight:bold;"
-        inactive_style = "background:#1a1e28; color:#8090aa; border:1px solid #2a2d3a; border-radius:4px; font-size:12px; font-weight:bold;"
-        for lbl, key in ((self._key_w, Qt.Key_W), (self._key_a, Qt.Key_A),
-                          (self._key_s, Qt.Key_S), (self._key_d, Qt.Key_D)):
-            lbl.setStyleSheet(active_style if key in held else inactive_style)
+        key = e.key()
+        if key in (Qt.Key_W, Qt.Key_A, Qt.Key_S, Qt.Key_D):
+            self._teleop_thread.drive(0.0, 0.0)
+            self._set_key_active(key, False)
+            self._update_vel_display(0.0, 0.0)
+        elif key in (Qt.Key_P, Qt.Key_L):
+            self._actuator_cmd(0)
 
-    def _actuator_cmd(self, command: str):
-        """Send actuator command and update status label."""
+    def _set_key_active(self, key: Qt.Key, active: bool):
+        active_style   = "background:#e8a030; color:#000; border:1px solid #e8a030; border-radius:4px; font-size:12px; font-weight:bold;"
+        inactive_style = "background:#1a1e28; color:#8090aa; border:1px solid #2a2d3a; border-radius:4px; font-size:12px; font-weight:bold;"
+        mapping = {Qt.Key_W: self._key_w, Qt.Key_A: self._key_a,
+                   Qt.Key_S: self._key_s, Qt.Key_D: self._key_d}
+        lbl = mapping.get(key)
+        if lbl:
+            lbl.setStyleSheet(active_style if active else inactive_style)
+
+    def _actuator_cmd(self, value: int):
+        """Send one actuator packet. +1=extend, -1=retract, 0=stop."""
         if self._teleop_thread:
-            self._teleop_thread.send_actuator(command)
-        label = {"extend": "▲ Extending…", "retract": "▼ Retracting…", "stop": "Actuator: idle"}.get(command, command)
+            self._teleop_thread.send_actuator(value)
+        label = {1: "▲ Extending…", -1: "▼ Retracting…", 0: "Actuator: idle"}.get(value, "")
+        color = {1: "#40c070",      -1: "#c04040",         0: "#607080"}.get(value, "#607080")
         self.act_status.setText(label)
-        color = {"extend": "#40c070", "retract": "#c04040", "stop": "#607080"}.get(command, "#607080")
         self.act_status.setStyleSheet(f"color:{color}; font-size:9px;")
 
-    # ── Velocity display ──────────────────────────────────────────────────
-    def _update_vel_display(self):
-        if self._teleop_thread:
-            with self._teleop_thread._lock:
-                lin = self._teleop_thread._linear
-                ang = self._teleop_thread._angular
-            self.vel_lin.setText(f"{lin:+.2f} m/s")
-            self.vel_ang.setText(f"{ang:+.2f} r/s")
-        else:
-            self.vel_lin.setText("0.00 m/s")
-            self.vel_ang.setText("0.00 r/s")
+    # ── Velocity display — updated directly on key press/release ──────────
+    def _update_vel_display(self, lin: float = 0.0, ang: float = 0.0):
+        self.vel_lin.setText(f"{lin:+.2f} m/s")
+        self.vel_ang.setText(f"{ang:+.2f} r/s")
 
     # ── Stop all ─────────────────────────────────────────────────────────
     def _stop_all(self):
