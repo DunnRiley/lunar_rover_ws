@@ -34,7 +34,7 @@ try:
     import rclpy
     from rclpy.node import Node
     from geometry_msgs.msg import Twist
-    from std_msgs.msg import String as RosString
+    from std_msgs.msg import String as RosString, Int8 as RosInt8
     ROS_AVAILABLE = True
 except ImportError:
     ROS_AVAILABLE = False
@@ -115,7 +115,7 @@ class TeleopPublisher(QThread):
                 rclpy.init()
             self._node = rclpy.create_node('rover_laptop_teleop')
             self._pub  = self._node.create_publisher(Twist, '/cmd_vel', 10)
-            self._actuator_pub = self._node.create_publisher(RosString, '/actuator_cmd', 10)
+            self._actuator_pub = self._node.create_publisher(RosInt8, '/actuator_cmd', 10)
             self._running = True
             self.status_changed.emit("Teleop node running")
 
@@ -138,8 +138,9 @@ class TeleopPublisher(QThread):
                 while True:
                     try:
                         act_cmd = self._actuator_queue.get_nowait()
-                        act_msg = RosString()
-                        act_msg.data = act_cmd
+                        act_msg = RosInt8()
+                        # extend=+1, retract=-1, stop=0  (matches arduino_motor_controller.py)
+                        act_msg.data = {"extend": 1, "retract": -1, "stop": 0}.get(act_cmd, 0)
                         self._actuator_pub.publish(act_msg)
                     except queue.Empty:
                         break
