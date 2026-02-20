@@ -2,8 +2,8 @@
 <package format="3">
   <name>lunar_robot_hardware</name>
   <version>1.0.0</version>
-  <description>Real hardware interface for lunar rover</description>
-  <maintainer email="your@email.com">Your Name</maintainer>
+  <description> Hardware interface for lunar rover</description>
+  <maintainer email="rileydunn@mines.edu">Riley Dunn</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

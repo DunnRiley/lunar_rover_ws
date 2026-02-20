@@ -30,8 +30,8 @@ pyhton3 optimized_image_pipeline.py
 bash laptop_ros_launch.sh
 
 
-## Test arduino teleop code no ROS
-cd /lunar_rover_ws/src/lunar_robot_hardware/lunar_robot_hardware/src
+## Test arduino teleop code no ROS (WORKING)
+cd /lunar_rover_ws/ArduinoNoROS
 python3 teleop_no_ros.py
 
 ## Teleop (Not integrated into split computer's)

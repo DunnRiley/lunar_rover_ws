@@ -1,84 +1,71 @@
 #!/usr/bin/env python3
 """
-Arduino Hardware Interface - Modern OOP Approach
-Communicates with Arduino Mega 2560 via serial protocol
-Protocol: [0xAA][Device][Signed_Speed][0x55]
+Arduino Hardware Interface - Matches Existing Arduino Firmware
+Protocol: [0xAA][Device][Speed][Direction][0x55]
+- Speed: 0-255 (unsigned)
+- Direction: 0 or 1 (0=forward, 1=backward)
 """
 
 import serial
 import time
 import threading
 from enum import IntEnum
-from typing import Optional, Dict, List
+from typing import Optional
 from dataclasses import dataclass
-import struct
 
 
 class DeviceID(IntEnum):
-    """Device identification bytes"""
+    """Device identification bytes - matches your Arduino code"""
     FL_WHEEL = 0x01      # Front Left Wheel
     FR_WHEEL = 0x02      # Front Right Wheel
     BL_WHEEL = 0x03      # Back Left Wheel
     BR_WHEEL = 0x04      # Back Right Wheel
-    ACTUATORS = 0x08     # Both actuators together
-    AL = 0xD4
-    AR = 0xF7
-    KILL = 0xFF
+    ACTUATORS = 0x08     # Both actuators
+    ACT_LEFT = 0xF7      # Left actuator only
+    ACT_RIGHT = 0xD4     # Right actuator only
+    STOP_ALL = 0xFF      # Emergency stop all
 
 
 @dataclass
 class ArduinoConfig:
     """Configuration for Arduino connection"""
-    port: str = '/dev/ttyACM0'  # Arduino Mega typically shows as ACM
-    baudrate: int = 115200       # Match Arduino's Serial.begin(115200)
+    port: str = '/dev/ttyACM0'
+    baudrate: int = 115200
     timeout: float = 1.0
     max_reconnect_attempts: int = 3
     
-    # Protocol bytes
     START_BYTE: int = 0xAA
     END_BYTE: int = 0x55
 
 
 class ArduinoProtocol:
-    """Handles the communication protocol with Arduino"""
+    """Handles the communication protocol"""
     
     @staticmethod
-    def encode_command(device_id: int, speed: int) -> bytes:
+    def encode_command(device_id: int, speed: int, direction: int) -> bytes:
         """
-        Encode a command packet
+        Encode a command packet matching your Arduino firmware
         
         Args:
             device_id: Device ID from DeviceID enum
-            speed: Signed speed value (-127 to +127)
+            speed: Unsigned speed (0-255)
+            direction: 0=forward, 1=backward
         
         Returns:
-            4-byte command packet [START][DEVICE][SPEED][END]
+            5-byte packet [0xAA][Device][Speed][Direction][0x55]
         """
-        # Ensure speed is in valid range
-        speed = max(-127, min(127, speed))
-        
-        # Convert to signed byte
-        speed_byte = speed & 0xFF
+        speed = max(0, min(255, speed))  # Clamp to 0-255
+        direction = 1 if direction else 0  # Ensure 0 or 1
         
         packet = bytes([
             ArduinoConfig.START_BYTE,
             device_id,
-            speed_byte,
+            speed,
+            direction,
             ArduinoConfig.END_BYTE
         ])
         
         return packet
-    
-    @staticmethod
-    def validate_packet(packet: bytes) -> bool:
-        """Validate a received packet"""
-        if len(packet) != 4:
-            return False
-        if packet[0] != ArduinoConfig.START_BYTE:
-            return False
-        if packet[3] != ArduinoConfig.END_BYTE:
-            return False
-        return True
 
 
 class ArduinoConnection:
@@ -101,10 +88,10 @@ class ArduinoConnection:
                     write_timeout=self.config.timeout
                 )
                 
-                # Wait for Arduino to reset (it resets on serial connection)
-                time.sleep(2.0)
+                # Wait for Arduino to reset
+                time.sleep(2)
                 
-                # Flush any startup messages
+                # Flush buffers
                 self.serial.reset_input_buffer()
                 self.serial.reset_output_buffer()
                 
@@ -113,365 +100,283 @@ class ArduinoConnection:
                 return True
                 
             except serial.SerialException as e:
-                print(f"✗ Attempt {attempt + 1}/{self.config.max_reconnect_attempts} "
-                      f"failed: {e}")
-                time.sleep(0.5)
+                print(f"Connection attempt {attempt + 1} failed: {e}")
+                time.sleep(1)
         
-        print(f"✗ Failed to connect to Arduino on {self.config.port}")
+        print(f"✗ Failed to connect after {self.config.max_reconnect_attempts} attempts")
         return False
     
-    def disconnect(self):
-        """Safely disconnect"""
-        with self._lock:
-            if self.serial and self.serial.is_open:
-                self.serial.close()
-                self._is_connected = False
-                print("Disconnected from Arduino")
-    
-    def send_command(self, device_id: int, speed: int) -> bool:
-        """
-        Send a command to Arduino
-        
-        Args:
-            device_id: Device to control
-            speed: Speed value (-127 to +127)
-        
-        Returns:
-            True if sent successfully
-        """
+    def send_command(self, device_id: int, speed: int, direction: int) -> bool:
+        """Send a command to Arduino"""
         if not self._is_connected or not self.serial:
             return False
         
-        packet = ArduinoProtocol.encode_command(device_id, speed)
-        
         with self._lock:
             try:
+                packet = ArduinoProtocol.encode_command(device_id, speed, direction)
                 self.serial.write(packet)
                 return True
-            except serial.SerialException as e:
-                print(f"✗ Send error: {e}")
+            except Exception as e:
+                print(f"Error sending command: {e}")
                 return False
+    
+    def close(self):
+        """Close the serial connection"""
+        if self.serial:
+            self.serial.close()
+            self._is_connected = False
+            print("Arduino connection closed")
     
     @property
     def is_connected(self) -> bool:
-        return self._is_connected and self.serial and self.serial.is_open
+        return self._is_connected
 
 
 class SkidSteerChassis:
-    """
-    High-level interface for 4-wheel skid-steer chassis
-    Handles differential drive kinematics
-    """
+    """High-level control for 4-wheel skid-steer rover"""
     
     def __init__(self, connection: ArduinoConnection):
         self.conn = connection
-        self._emergency_stop = False
+        self.max_speed = 255
         
-    def emergency_stop(self):
-        """Emergency stop - immediately halt all motors"""
-        self._emergency_stop = True
-        self.stop()
-        print("🚨 EMERGENCY STOP ACTIVATED")
+    def set_wheel(self, device_id: int, speed: int, forward: bool = True):
+        """Control individual wheel"""
+        direction = 0 if forward else 1
+        self.conn.send_command(device_id, abs(speed), direction)
     
-    def clear_emergency_stop(self):
-        """Clear emergency stop state"""
-        self._emergency_stop = False
-        print("✓ Emergency stop cleared")
-    
-    def stop(self):
-        """Stop all drive motors"""
-        for device in [DeviceID.FL_WHEEL, DeviceID.FR_WHEEL, 
-                      DeviceID.BL_WHEEL, DeviceID.BR_WHEEL]:
-            self.conn.send_command(device, 0)
-    
-    def forward(self, speed: int = 100):
-        """Move forward - all wheels forward"""
-        if self._emergency_stop:
-            return
-        
-        for device in [DeviceID.FL_WHEEL, DeviceID.FR_WHEEL,
-                      DeviceID.BL_WHEEL, DeviceID.BR_WHEEL]:
-            self.conn.send_command(device, speed)
-    
-    def backward(self, speed: int = 100):
-        """Move backward - all wheels backward"""
-        if self._emergency_stop:
-            return
-        
-        for device in [DeviceID.FL_WHEEL, DeviceID.FR_WHEEL,
-                      DeviceID.BL_WHEEL, DeviceID.BR_WHEEL]:
-            self.conn.send_command(device, -speed)
-    
-    def turn_left(self, speed: int = 80):
-        """Pivot turn left - left wheels backward, right forward"""
-        if self._emergency_stop:
-            return
-        
-        self.conn.send_command(DeviceID.FL_WHEEL, -speed)
-        self.conn.send_command(DeviceID.BL_WHEEL, -speed)
-        self.conn.send_command(DeviceID.FR_WHEEL, speed)
-        self.conn.send_command(DeviceID.BR_WHEEL, speed)
-    
-    def turn_right(self, speed: int = 80):
-        """Pivot turn right - left wheels forward, right backward"""
-        if self._emergency_stop:
-            return
-        
-        self.conn.send_command(DeviceID.FL_WHEEL, speed)
-        self.conn.send_command(DeviceID.BL_WHEEL, speed)
-        self.conn.send_command(DeviceID.FR_WHEEL, -speed)
-        self.conn.send_command(DeviceID.BR_WHEEL, -speed)
-    
-    def process_cmd_vel(self, linear: float, angular: float,
-                       deadzone_linear: float = 0.05,
-                       deadzone_angular: float = 0.05,
-                       max_speed: int = 127):
+    def set_all_wheels(self, fl_speed: int, fr_speed: int, 
+                       bl_speed: int, br_speed: int):
         """
-        Process ROS cmd_vel-style commands
+        Set all wheels individually
+        Positive speed = forward, Negative = backward
+        """
+        self.set_wheel(DeviceID.FL_WHEEL, abs(fl_speed), fl_speed >= 0)
+        self.set_wheel(DeviceID.FR_WHEEL, abs(fr_speed), fr_speed >= 0)
+        self.set_wheel(DeviceID.BL_WHEEL, abs(bl_speed), bl_speed >= 0)
+        self.set_wheel(DeviceID.BR_WHEEL, abs(br_speed), br_speed >= 0)
+    
+    def drive(self, linear: float, angular: float):
+        """
+        Differential drive control
         
         Args:
-            linear: Linear velocity (-1.0 to 1.0)
-            angular: Angular velocity (-1.0 to 1.0)
-            deadzone_linear: Deadzone for linear velocity
-            deadzone_angular: Deadzone for angular velocity
-            max_speed: Maximum motor speed (0-127)
+            linear: Forward speed (-1.0 to 1.0)
+            angular: Turn rate (-1.0 to 1.0)
         """
-        if self._emergency_stop:
-            return
+        # Clamp inputs
+        linear = max(-1.0, min(1.0, linear))
+        angular = max(-1.0, min(1.0, angular))
         
-        # Apply deadzones
-        if abs(linear) < deadzone_linear:
-            linear = 0.0
-        if abs(angular) < deadzone_angular:
-            angular = 0.0
-        
-        # Stop command
-        if abs(linear) < 0.01 and abs(angular) < 0.01:
-            self.stop()
-            return
-        
-        # Convert to motor speeds using differential drive
-        # Left side speed
+        # Calculate left and right side speeds
         left_speed = linear - angular
-        # Right side speed
         right_speed = linear + angular
         
-        # Normalize to max speed
+        # Normalize if either exceeds 1.0
         max_val = max(abs(left_speed), abs(right_speed))
         if max_val > 1.0:
             left_speed /= max_val
             right_speed /= max_val
         
-        # Convert to motor values
-        left_motor = int(left_speed * max_speed)
-        right_motor = int(right_speed * max_speed)
+        # Scale to motor speed
+        left_motor = int(left_speed * self.max_speed)
+        right_motor = int(right_speed * self.max_speed)
         
-        # Send to motors
-        self.conn.send_command(DeviceID.FL_WHEEL, left_motor)
-        self.conn.send_command(DeviceID.BL_WHEEL, left_motor)
-        self.conn.send_command(DeviceID.FR_WHEEL, right_motor)
-        self.conn.send_command(DeviceID.BR_WHEEL, right_motor)
+        # Send to all wheels
+        self.set_all_wheels(left_motor, right_motor, left_motor, right_motor)
+    
+    def stop(self):
+        """Stop all drive wheels"""
+        self.set_all_wheels(0, 0, 0, 0)
+    
+    def forward(self, speed: int = 128):
+        """Drive forward"""
+        self.set_all_wheels(speed, speed, speed, speed)
+    
+    def backward(self, speed: int = 128):
+        """Drive backward"""
+        self.set_all_wheels(-speed, -speed, -speed, -speed)
+    
+    def turn_left(self, speed: int = 128):
+        """Pivot turn left"""
+        self.set_all_wheels(-speed, speed, -speed, speed)
+    
+    def turn_right(self, speed: int = 128):
+        """Pivot turn right"""
+        self.set_all_wheels(speed, -speed, speed, -speed)
 
 
 class ActuatorController:
-    """
-    Controls excavation actuators
-    """
+    """Control excavation actuators"""
     
     def __init__(self, connection: ArduinoConnection):
         self.conn = connection
         
+    def extend(self, speed: int = 200):
+        """Extend actuators"""
+        self.conn.send_command(DeviceID.ACTUATORS, abs(speed), 0)  # 0 = forward/extend
+    
+    def retract(self, speed: int = 200):
+        """Retract actuators"""
+        self.conn.send_command(DeviceID.ACTUATORS, abs(speed), 1)  # 1 = backward/retract
+    
     def stop(self):
         """Stop actuators"""
-        self.conn.send_command(DeviceID.ACTUATORS, 0)
+        self.conn.send_command(DeviceID.ACTUATORS, 0, 0)
     
-    def extend(self, speed: int = 100):
-        """Extend actuators"""
-        self.conn.send_command(DeviceID.ACTUATORS, speed)
+    def extend_left(self, speed: int = 200):
+        """Extend left actuator only"""
+        self.conn.send_command(DeviceID.ACT_LEFT, abs(speed), 0)
     
-    def retract(self, speed: int = 100):
-        """Retract actuators"""
-        self.conn.send_command(DeviceID.ACTUATORS, -speed)
+    def retract_left(self, speed: int = 200):
+        """Retract left actuator only"""
+        self.conn.send_command(DeviceID.ACT_LEFT, abs(speed), 1)
+    
+    def extend_right(self, speed: int = 200):
+        """Extend right actuator only"""
+        self.conn.send_command(DeviceID.ACT_RIGHT, abs(speed), 0)
+    
+    def retract_right(self, speed: int = 200):
+        """Retract right actuator only"""
+        self.conn.send_command(DeviceID.ACT_RIGHT, abs(speed), 1)
 
 
 class ArduinoRover:
-    """
-    Complete rover system with chassis and actuators
-    Main interface for high-level control
-    """
+    """Complete rover system interface"""
     
     def __init__(self, port: str = '/dev/ttyACM0', baudrate: int = 115200):
-        """
-        Initialize rover
-        
-        Args:
-            port: Serial port for Arduino (default /dev/ttyACM0)
-            baudrate: Serial baudrate (must match Arduino code)
-        """
         self.config = ArduinoConfig(port=port, baudrate=baudrate)
         self.connection = ArduinoConnection(self.config)
         self.chassis = SkidSteerChassis(self.connection)
         self.actuators = ActuatorController(self.connection)
-        
+        self._emergency_stopped = False
+    
     def connect(self) -> bool:
         """Connect to Arduino"""
         return self.connection.connect()
     
-    def disconnect(self):
-        """Disconnect from Arduino"""
-        # Safety: stop everything before disconnecting
+    def emergency_stop(self):
+        """Emergency stop all systems"""
+        self._emergency_stopped = True
+        self.connection.send_command(DeviceID.STOP_ALL, 0, 0)
+        print("🛑 EMERGENCY STOP ACTIVATED")
+    
+    def resume(self):
+        """Clear emergency stop"""
+        self._emergency_stopped = False
+        print("✓ Emergency stop cleared")
+    
+    def process_cmd_vel(self, linear_x: float, angular_z: float):
+        """
+        Process ROS cmd_vel message
+        
+        Args:
+            linear_x: Linear velocity in m/s
+            angular_z: Angular velocity in rad/s
+        """
+        if self._emergency_stopped:
+            return
+        
+        # Normalize to -1.0 to 1.0 range
+        # Assuming max linear speed = 0.5 m/s, max angular = 1.0 rad/s
+        linear_norm = linear_x / 0.5
+        angular_norm = angular_z / 1.0
+        
+        self.chassis.drive(linear_norm, angular_norm)
+    
+    def close(self):
+        """Shutdown rover safely"""
         self.chassis.stop()
         self.actuators.stop()
-        self.connection.disconnect()
-    
-    @property
-    def is_connected(self) -> bool:
-        """Check if connected"""
-        return self.connection.is_connected
-    
-    def emergency_stop_all(self):
-        """Emergency stop everything"""
-        self.chassis.emergency_stop()
-        self.actuators.stop()
+        self.connection.close()
     
     def __enter__(self):
         """Context manager entry"""
-        self.connect()
+        if not self.connect():
+            raise ConnectionError("Failed to connect to Arduino")
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
-        self.disconnect()
+        self.close()
 
 
-# Factory function for easy setup
-def create_arduino_rover(port: str = '/dev/ttyACM0',
+def create_arduino_rover(port: str = '/dev/ttyACM0', 
                         baudrate: int = 115200) -> ArduinoRover:
     """
     Factory function to create and connect to rover
     
-    Args:
-        port: Serial port (default /dev/ttyACM0 for Arduino Mega)
-        baudrate: Must match Arduino's Serial.begin() value
-    
-    Returns:
-        Connected ArduinoRover instance
-    
     Example:
-        rover = create_arduino_rover()
-        if rover.is_connected:
-            rover.chassis.forward()
+        rover = create_arduino_rover('/dev/ttyACM0')
+        rover.connect()
+        rover.chassis.forward(speed=100)
+        time.sleep(2)
+        rover.chassis.stop()
+        rover.close()
     """
     rover = ArduinoRover(port, baudrate)
-    rover.connect()
     return rover
 
 
-# ========== TEST CODE ==========
+# Test code
 if __name__ == '__main__':
-    print("="*70)
-    print("  Arduino Rover Hardware Test")
-    print("="*70)
-    print("\nThis will test the Arduino communication")
-    print("Make sure Arduino is connected and loaded with the rover firmware")
+    import sys
+    
+    print("Arduino Rover Hardware Interface Test")
+    print("=" * 50)
+    
+    # Detect Arduino port
+    import glob
+    possible_ports = glob.glob('/dev/ttyACM*') + glob.glob('/dev/ttyUSB*')
+    
+    if not possible_ports:
+        print("No Arduino found!")
+        print("Please connect Arduino and try again")
+        sys.exit(1)
+    
+    port = possible_ports[0]
+    print(f"Using port: {port}")
     print()
     
-    # Check for available serial ports
-    import serial.tools.list_ports
-    ports = list(serial.tools.list_ports.comports())
-    
-    if ports:
-        print("Available serial ports:")
-        for p in ports:
-            print(f"  {p.device} - {p.description}")
-        print()
-    else:
-        print("⚠️  No serial ports found!")
-        print("Make sure Arduino is connected via USB")
-        exit(1)
-    
-    # Try to connect
-    port = input("Enter Arduino port [/dev/ttyACM0]: ").strip() or '/dev/ttyACM0'
-    
-    print(f"\nConnecting to {port}...")
-    
-    with create_arduino_rover(port=port) as rover:
-        if not rover.is_connected:
-            print("✗ Connection failed!")
-            exit(1)
-        
-        print("✓ Connected!")
-        print("\nRunning test sequence...\n")
-        
-        try:
-            # Test 1: Forward
-            print("Test 1: Forward (2 seconds)")
-            rover.chassis.forward(speed=80)
+    try:
+        with create_arduino_rover(port) as rover:
+            print("\n1. Testing forward movement...")
+            rover.chassis.forward(speed=100)
             time.sleep(2)
-            
-            # Test 2: Stop
-            print("Test 2: Stop")
             rover.chassis.stop()
             time.sleep(1)
             
-            # Test 3: Backward
-            print("Test 3: Backward (2 seconds)")
-            rover.chassis.backward(speed=80)
+            print("2. Testing backward movement...")
+            rover.chassis.backward(speed=100)
             time.sleep(2)
-            
-            # Test 4: Stop
-            print("Test 4: Stop")
             rover.chassis.stop()
             time.sleep(1)
             
-            # Test 5: Turn left
-            print("Test 5: Turn left (2 seconds)")
-            rover.chassis.turn_left(speed=60)
+            print("3. Testing left turn...")
+            rover.chassis.turn_left(speed=80)
             time.sleep(2)
-            
-            # Test 6: Stop
-            print("Test 6: Stop")
             rover.chassis.stop()
             time.sleep(1)
             
-            # Test 7: Turn right
-            print("Test 7: Turn right (2 seconds)")
-            rover.chassis.turn_right(speed=60)
+            print("4. Testing right turn...")
+            rover.chassis.turn_right(speed=80)
             time.sleep(2)
-            
-            # Test 8: Stop
-            print("Test 8: Stop")
             rover.chassis.stop()
             time.sleep(1)
             
-            # Test 9: Actuators extend
-            print("Test 9: Actuators extend (1 second)")
-            rover.actuators.extend(speed=80)
-            time.sleep(1)
-            
-            # Test 10: Actuators stop
-            print("Test 10: Actuators stop")
+            print("5. Testing actuator extend...")
+            rover.actuators.extend(speed=150)
+            time.sleep(2)
             rover.actuators.stop()
             time.sleep(1)
             
-            # Test 11: Actuators retract
-            print("Test 11: Actuators retract (1 second)")
-            rover.actuators.retract(speed=80)
-            time.sleep(1)
-            
-            # Test 12: Final stop
-            print("Test 12: Final stop")
+            print("6. Testing actuator retract...")
+            rover.actuators.retract(speed=150)
+            time.sleep(2)
             rover.actuators.stop()
-            rover.chassis.stop()
             
-            print("\n✓ Test sequence complete!")
+            print("\n✓ All tests completed!")
             
-        except KeyboardInterrupt:
-            print("\n\n⚠️  Test interrupted by user")
-            rover.emergency_stop_all()
-        
-        except Exception as e:
-            print(f"\n\n✗ Error during test: {e}")
-            rover.emergency_stop_all()
-    
-    print("\n✓ Test complete. Arduino disconnected safely.")
+    except KeyboardInterrupt:
+        print("\nTest interrupted by user")
+    except Exception as e:
+        print(f"\n✗ Error: {e}")
