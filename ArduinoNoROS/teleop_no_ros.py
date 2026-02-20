@@ -1,12 +1,9 @@
+import curses
 import serial
-import keyboard
 import time
 
-PORT = '/dev/ttyACM0'   # change for Windows: COM3
+PORT = '/dev/ttyACM0'
 BAUD = 115200
-
-ser = serial.Serial(PORT, BAUD)
-time.sleep(2)
 
 START = 0xAA
 END   = 0x55
@@ -19,57 +16,131 @@ AL = 0xD4
 AR = 0xF7
 KILL = 0xFF
 
-def send_packet(device, speed, direction):
+SPEED = 150
+
+
+def send_packet(ser, device, speed, direction):
     packet = bytes([START, device, speed, direction, END])
     ser.write(packet)
 
-speed = 150
 
-print("Teleop Ready")
+def stop_drive(ser):
+    for d in [FL, FR, BL, BR]:
+        send_packet(ser, d, 0, 0)
 
-while True:
 
-    if keyboard.is_pressed('w'):
-        for d in [FL, FR, BL, BR]:
-            send_packet(d, speed, 0x00)
+def main(stdscr):
+    curses.curs_set(0)
+    stdscr.nodelay(True)
+    stdscr.timeout(50)
 
-    elif keyboard.is_pressed('s'):
-        for d in [FL, FR, BL, BR]:
-            send_packet(d, speed, 0x01)
+    ser = serial.Serial(PORT, BAUD)
+    time.sleep(2)  # Allow Arduino reset
 
-    elif keyboard.is_pressed('a'):
-        send_packet(FL, speed, 0x01)
-        send_packet(BL, speed, 0x01)
-        send_packet(FR, speed, 0x00)
-        send_packet(BR, speed, 0x00)
+    stdscr.addstr(0, 0, "Rover Teleop (Curses)")
+    stdscr.addstr(1, 0, "W/S = Forward/Back")
+    stdscr.addstr(2, 0, "A/D = Left/Right")
+    stdscr.addstr(3, 0, "P/L = Both Actuators")
+    stdscr.addstr(4, 0, "O/K = Left Actuator")
+    stdscr.addstr(5, 0, "I/J = Right Actuator")
+    stdscr.addstr(6, 0, "1-4 = Test Individual Drive Motors")
+    stdscr.addstr(7, 0, "SPACE = Kill")
+    stdscr.addstr(8, 0, "Q = Quit")
 
-    elif keyboard.is_pressed('d'):
-        send_packet(FL, speed, 0x00)
-        send_packet(BL, speed, 0x00)
-        send_packet(FR, speed, 0x01)
-        send_packet(BR, speed, 0x01)
+    while True:
+        key = stdscr.getch()
 
-    elif keyboard.is_pressed('p'):   # both actuators forward
-        send_packet(AL, speed, 0x00)
-        send_packet(AR, speed, 0x00)
+        if key == ord('q'):
+            break
 
-    elif keyboard.is_pressed('l'):   # both actuators reverse
-        send_packet(AL, speed, 0x01)
-        send_packet(AR, speed, 0x01)
+        # -------- DRIVE --------
+        elif key == ord('a'):
+            for d in [FL, FR, BL, BR]:
+                send_packet(ser, d, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Driving Forward      ")
 
-    elif keyboard.is_pressed('o'):   # left only forward
-        send_packet(AL, speed, 0x00)
+        elif key == ord('d'):
+            for d in [FL, FR, BL, BR]:
+                send_packet(ser, d, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Driving Backward     ")
 
-    elif keyboard.is_pressed('k'):   # left only reverse
-        send_packet(AL, speed, 0x01)
+        elif key == ord('w'):
+            send_packet(ser, FL, SPEED, 0x01)
+            send_packet(ser, BL, SPEED, 0x01)
+            send_packet(ser, FR, SPEED, 0x00)
+            send_packet(ser, BR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Turning Left         ")
 
-    elif keyboard.is_pressed('i'):   # right only forward
-        send_packet(AR, speed, 0x00)
+        elif key == ord('s'):
+            send_packet(ser, FL, SPEED, 0x00)
+            send_packet(ser, BL, SPEED, 0x00)
+            send_packet(ser, FR, SPEED, 0x01)
+            send_packet(ser, BR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Turning Right        ")
 
-    elif keyboard.is_pressed('j'):   # right only reverse
-        send_packet(AR, speed, 0x01)
+        # -------- INDIVIDUAL MOTOR TEST --------
+        elif key == ord('1'):
+            stop_drive(ser)
+            send_packet(ser, FL, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing FL Motor     ")
 
-    elif keyboard.is_pressed('space'):
-        send_packet(KILL, 0, 0)
+        elif key == ord('2'):
+            stop_drive(ser)
+            send_packet(ser, FR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing FR Motor     ")
 
-    time.sleep(0.05)
+        elif key == ord('3'):
+            stop_drive(ser)
+            send_packet(ser, BL, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing BL Motor     ")
+
+        elif key == ord('4'):
+            stop_drive(ser)
+            send_packet(ser, BR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing BR Motor     ")
+
+        # -------- ACTUATORS --------
+        elif key == ord('p'):
+            send_packet(ser, AL, SPEED, 0x00)
+            send_packet(ser, AR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Actuators Forward    ")
+
+        elif key == ord('l'):
+            send_packet(ser, AL, SPEED, 0x01)
+            send_packet(ser, AR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Actuators Reverse    ")
+
+        elif key == ord('o'):
+            send_packet(ser, AL, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Left Actuator Fwd    ")
+
+        elif key == ord('k'):
+            send_packet(ser, AL, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Left Actuator Rev    ")
+
+        elif key == ord('i'):
+            send_packet(ser, AR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Right Actuator Fwd   ")
+
+        elif key == ord('j'):
+            send_packet(ser, AR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Right Actuator Rev   ")
+
+        # -------- KILL --------
+        elif key == ord(' '):
+            send_packet(ser, KILL, 0, 0)
+            stdscr.addstr(10, 0, "KILL                 ")
+
+        else:
+            stop_drive(ser)
+            stdscr.addstr(10, 0, "Idle                 ")
+
+        stdscr.refresh()
+
+    stop_drive(ser)
+    ser.close()
+
+
+if __name__ == "__main__":
+    curses.wrapper(main)
+
