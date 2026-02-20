@@ -21,8 +21,9 @@ class DeviceID(IntEnum):
     BL_WHEEL = 0x03      # Back Left Wheel
     BR_WHEEL = 0x04      # Back Right Wheel
     ACTUATORS = 0x08     # Both actuators together
-    SERVO1 = 0x10
-    SERVO2 = 0x11
+    AL = 0xD4
+    AR = 0xF7
+    KILL = 0xFF
 
 
 @dataclass

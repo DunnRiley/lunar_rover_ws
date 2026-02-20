@@ -1,42 +1,75 @@
 import serial
-from pynput import keyboard
+import keyboard
+import time
 
-SERIAL_PORT = "/dev/ttyACM0"  # adjust if needed
+PORT = '/dev/ttyACM0'   # change for Windows: COM3
 BAUD = 115200
 
-ser = serial.Serial(SERIAL_PORT, BAUD, timeout=0.1)
+ser = serial.Serial(PORT, BAUD)
+time.sleep(2)
 
-keymap = {
-    'w': 'w',
-    's': 's',
-    'a': 'a',
-    'd': 'd',
-    'r': 'r',
-    'f': 'f',
-    'o': 'o',
-    'l': 'l',
-}
+START = 0xAA
+END   = 0x55
 
-pressed = set()
+FL = 0x01
+FR = 0x02
+BL = 0x03
+BR = 0x04
+AL = 0xD4
+AR = 0xF7
+KILL = 0xFF
 
-def send():
-    for k in pressed:
-        ser.write(k.encode())
+def send_packet(device, speed, direction):
+    packet = bytes([START, device, speed, direction, END])
+    ser.write(packet)
 
-def on_press(key):
-    try:
-        if key.char in keymap:
-            pressed.add(keymap[key.char])
-            send()
-    except AttributeError:
-        pass
+speed = 150
 
-def on_release(key):
-    try:
-        if key.char in pressed:
-            pressed.remove(key.char)
-    except AttributeError:
-        pass
+print("Teleop Ready")
 
-with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-    listener.join()
+while True:
+
+    if keyboard.is_pressed('w'):
+        for d in [FL, FR, BL, BR]:
+            send_packet(d, speed, 0x00)
+
+    elif keyboard.is_pressed('s'):
+        for d in [FL, FR, BL, BR]:
+            send_packet(d, speed, 0x01)
+
+    elif keyboard.is_pressed('a'):
+        send_packet(FL, speed, 0x01)
+        send_packet(BL, speed, 0x01)
+        send_packet(FR, speed, 0x00)
+        send_packet(BR, speed, 0x00)
+
+    elif keyboard.is_pressed('d'):
+        send_packet(FL, speed, 0x00)
+        send_packet(BL, speed, 0x00)
+        send_packet(FR, speed, 0x01)
+        send_packet(BR, speed, 0x01)
+
+    elif keyboard.is_pressed('p'):   # both actuators forward
+        send_packet(AL, speed, 0x00)
+        send_packet(AR, speed, 0x00)
+
+    elif keyboard.is_pressed('l'):   # both actuators reverse
+        send_packet(AL, speed, 0x01)
+        send_packet(AR, speed, 0x01)
+
+    elif keyboard.is_pressed('o'):   # left only forward
+        send_packet(AL, speed, 0x00)
+
+    elif keyboard.is_pressed('k'):   # left only reverse
+        send_packet(AL, speed, 0x01)
+
+    elif keyboard.is_pressed('i'):   # right only forward
+        send_packet(AR, speed, 0x00)
+
+    elif keyboard.is_pressed('j'):   # right only reverse
+        send_packet(AR, speed, 0x01)
+
+    elif keyboard.is_pressed('space'):
+        send_packet(KILL, 0, 0)
+
+    time.sleep(0.05)
