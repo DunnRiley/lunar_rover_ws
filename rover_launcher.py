@@ -481,7 +481,7 @@ ros2 run rviz2 rviz2 -d ~/lunar_rover_ws/hardware_navigation.rviz --ros-args -p 
 
     def start_minipc(self):
         command = """
-    ssh moonpie@138.67.181.222 'bash ~/lunar_rover_ws/mini_pc_launch.sh'
+    ssh moonpie@192.168.0.102 'bash ~/lunar_rover_ws/mini_pc_launch.sh'
     """
         run_in_terminal(command)
 

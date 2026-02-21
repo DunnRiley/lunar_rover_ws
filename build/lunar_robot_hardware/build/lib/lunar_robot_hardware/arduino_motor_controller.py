@@ -17,14 +17,16 @@ import serial
 import time
 
 # ── Device IDs ───────────────────────────────────────────────────────────
-FL   = 0x01
-FR   = 0x02
-BL   = 0x03
-BR   = 0x04
-AL   = 0xD4   # Left  actuator
-AR   = 0xF7   # Right actuator
-ACT  = 0x08   # Both actuators together
-KILL = 0xFF
+FL    = 0x01   # individual wheel (legacy/debug only)
+FR    = 0x02
+BL    = 0x03
+BR    = 0x04
+LEFT  = 0x05   # FL + BL together  ← normal driving
+RIGHT = 0x06   # FR + BR together  ← normal driving
+AL    = 0xD4   # Left  actuator (individual override only)
+AR    = 0xF7   # Right actuator (individual override only)
+ACT   = 0x08   # Both actuators simultaneously — always use this
+KILL  = 0xFF
 
 START = 0xAA
 END   = 0x55
@@ -107,8 +109,9 @@ class ArduinoMotorController(Node):
             self.get_logger().error(f'Serial write error: {e}')
 
     def _stop_drive(self):
-        for dev in [FL, FR, BL, BR]:
-            self._send(dev, 0, 0)
+        # 2 packets instead of 4 — both sides go to 0 simultaneously
+        self._send(LEFT,  0, 0)
+        self._send(RIGHT, 0, 0)
 
     def _stop_actuators(self):
         self._send(ACT, 0, 0)
@@ -119,7 +122,11 @@ class ArduinoMotorController(Node):
     # ── Drive helper ──────────────────────────────────────────────────────
 
     def _set_drive(self, left: float, right: float):
-        """left / right in range [-1.0, 1.0]"""
+        """
+        Drive both sides. left / right in range [-1.0, 1.0].
+        Sends 2 serial packets per update (LEFT side, RIGHT side)
+        instead of 4 — eliminates the sequential stutter.
+        """
         def to_bytes(v):
             spd = min(int(abs(v) * self.max_speed), 255)
             direction = 0x00 if v >= 0 else 0x01
@@ -127,10 +134,9 @@ class ArduinoMotorController(Node):
 
         ls, ld = to_bytes(left)
         rs, rd = to_bytes(right)
-        self._send(FL, ls, ld)
-        self._send(BL, ls, ld)
-        self._send(FR, rs, rd)
-        self._send(BR, rs, rd)
+        # One packet drives FL+BL, one packet drives FR+BR
+        self._send(LEFT,  ls, ld)
+        self._send(RIGHT, rs, rd)
 
     # ── Callbacks ─────────────────────────────────────────────────────────
 
@@ -164,17 +170,18 @@ class ArduinoMotorController(Node):
 
     def _actuator_cb(self, msg: Int8):
         """
-        +1 = extend   (direction 0x00, forward)
-        -1 = retract  (direction 0x01, backward)
+        +1 = extend   (direction 0x00)
+        -1 = retract  (direction 0x01)
          0 = stop
+        ALWAYS uses ACT (0x08) — drives both actuators in one packet.
+        Never sends to AL/AR individually to prevent mechanical damage.
         """
         if self.emergency:
             return
 
         self.last_act_time = self.get_clock().now()
         val = msg.data
-        spd = int(abs(val) * self.max_speed) if val != 0 else 0
-        spd = min(spd, 255)
+        spd = min(int(abs(val) * self.max_speed), 255) if val != 0 else 0
 
         if val > 0:
             self._send(ACT, spd, 0x00)
