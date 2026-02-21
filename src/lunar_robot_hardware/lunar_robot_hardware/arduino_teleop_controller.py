@@ -2,7 +2,7 @@
 """
 Gamepad Teleop for Lunar Rover (ROS2)
 
-Requires joy_node running first:
+Runs on the LAPTOP. Requires joy_node running first:
   ros2 run joy joy_node
 
 Controller Layout (Xbox / generic USB gamepad):
@@ -52,10 +52,13 @@ class ControllerTeleop(Node):
         super().__init__('controller_teleop')
 
         # ── State ────────────────────────────────────────────────────────
-        self.speed     = SPEED_START
-        self.emergency = False
-        self.last_joy  = self.get_clock().now()
-        self._prev     = {BTN_LB: 0, BTN_RB: 0, BTN_START: 0}
+        self.speed       = SPEED_START
+        self.emergency   = False
+        self.last_joy    = self.get_clock().now()
+        self._prev       = {BTN_LB: 0, BTN_RB: 0, BTN_START: 0}
+        self._last_act   = 0     # 0=stop, 1=extend, -1=retract
+        self._last_lin   = 0.0
+        self._last_ang   = 0.0
 
         # ── Publishers ───────────────────────────────────────────────────
         self.cmd_pub   = self.create_publisher(Twist, '/cmd_vel',        10)
@@ -88,22 +91,42 @@ class ControllerTeleop(Node):
         return cur == 1 and prev == 0
 
     def _stop_drive(self):
-        self.cmd_pub.publish(Twist())
+        if self._last_lin != 0.0 or self._last_ang != 0.0:
+            self.cmd_pub.publish(Twist())
+            self._last_lin = 0.0
+            self._last_ang = 0.0
 
     def _stop_actuators(self):
-        m = Int8(); m.data = 0
-        self.act_pub.publish(m)
+        if self._last_act != 0:
+            m = Int8(); m.data = 0
+            self.act_pub.publish(m)
+            self._last_act = 0
+
+    def _publish_drive(self, lin: float, ang: float):
+        """Only publish if values changed enough to matter."""
+        if abs(lin - self._last_lin) < 0.01 and abs(ang - self._last_ang) < 0.01:
+            return
+        twist = Twist()
+        twist.linear.x  = lin
+        twist.angular.z = ang
+        self.cmd_pub.publish(twist)
+        self._last_lin = lin
+        self._last_ang = ang
 
     def _publish_actuator(self, val: int):
+        """Only publish if actuator state changed."""
+        if val == self._last_act:
+            return
         m = Int8(); m.data = val
         self.act_pub.publish(m)
+        self._last_act = val
 
     # ── Joy callback ─────────────────────────────────────────────────────
 
     def _joy_cb(self, msg: Joy):
         self.last_joy = self.get_clock().now()
 
-        # ── Emergency stop (rising edge) ──────────────────────────────────
+        # ── Emergency stop toggle (rising edge only) ──────────────────────
         if self._rising(msg, BTN_START):
             self.emergency = not self.emergency
             em = Bool(); em.data = self.emergency
@@ -114,12 +137,11 @@ class ControllerTeleop(Node):
             self.get_logger().warn(f'Emergency stop {state}')
 
         if self.emergency:
-            # Still consume edge detection for other buttons
             self._rising(msg, BTN_LB)
             self._rising(msg, BTN_RB)
             return
 
-        # ── Speed control (rising edge) ───────────────────────────────────
+        # ── Speed control (rising edge — one event per click) ─────────────
         if self._rising(msg, BTN_RB):
             self.speed = round(min(SPEED_MAX, self.speed + SPEED_STEP), 2)
             self.get_logger().info(f'Speed: {self.speed:.2f}')
@@ -128,18 +150,14 @@ class ControllerTeleop(Node):
             self.speed = round(max(SPEED_MIN, self.speed - SPEED_STEP), 2)
             self.get_logger().info(f'Speed: {self.speed:.2f}')
 
-        # ── Actuators (hold buttons — mutually exclusive) ─────────────────
+        # ── Actuators (hold — only publishes when state changes) ──────────
         a_held = self._btn(msg, BTN_A)
         b_held = self._btn(msg, BTN_B)
 
         if a_held:
-            self._publish_actuator(1)    # extend
-            self.get_logger().info('Actuators: EXTEND',
-                                   throttle_duration_sec=0.5)
+            self._publish_actuator(1)
         elif b_held:
-            self._publish_actuator(-1)   # retract
-            self.get_logger().info('Actuators: RETRACT',
-                                   throttle_duration_sec=0.5)
+            self._publish_actuator(-1)
         else:
             self._stop_actuators()
 
@@ -147,21 +165,17 @@ class ControllerTeleop(Node):
         fwd  = self._dz(self._ax(msg, AXIS_FWD))
         turn = self._dz(self._ax(msg, AXIS_TURN))
 
-        twist = Twist()
+        if fwd == 0.0 and turn == 0.0:
+            self._stop_drive()
+            return
 
-        if fwd != 0.0 and turn == 0.0:
-            twist.angular.z = turn * self.speed * ANGULAR_SCALE
+        lin = fwd  * self.speed
+        ang = turn * self.speed * ANGULAR_SCALE
+        self._publish_drive(lin, ang)
 
-        elif turn != 0.0 and fwd == 0.0:
-            twist.angular.z = turn * self.speed * ANGULAR_SCALE
-            twist.linear.x = fwd * self.speed
-
-        elif fwd != 0.0 and turn != 0.0:
-            # Both axes — gentle arc
-            twist.linear.x  = fwd  * self.speed
-            twist.angular.z = turn * self.speed * ANGULAR_SCALE
-
-        self.cmd_pub.publish(twist)
+        self.get_logger().info(
+            f'Drive  lin={lin:.2f}  ang={ang:.2f}  speed={self.speed:.2f}',
+            throttle_duration_sec=0.5)
 
     # ── Watchdog ──────────────────────────────────────────────────────────
 
@@ -184,11 +198,9 @@ class ControllerTeleop(Node):
         self.estop_pub.publish(em)
         super().destroy_node()
 
-    # ── Instructions ─────────────────────────────────────────────────────
-
     def _print_instructions(self):
         print('\n' + '='*55)
-        print('  LUNAR ROVER  Controller Teleop')
+        print('  LUNAR ROVER  ·  Controller Teleop')
         print('='*55)
         print('  Left  Stick Y    Forward / Backward')
         print('  Right Stick X    Pivot Left / Pivot Right')
@@ -201,11 +213,10 @@ class ControllerTeleop(Node):
         print(f'  Starting speed : {self.speed:.2f}')
         print(f'  Deadzone       : {DEADZONE}')
         print('='*55)
-        print('\nMake sure joy_node is running:')
-        print('  ros2 run joy joy_node\n')
-        print('If buttons feel wrong run:')
+        print()
+        print('Tip: run this to check your controller mapping:')
         print('  ros2 topic echo /joy')
-        print('and adjust the index constants at the top of the file.\n')
+        print()
 
 
 def main(args=None):
