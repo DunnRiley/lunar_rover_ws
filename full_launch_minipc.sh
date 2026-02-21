@@ -221,21 +221,28 @@ fi
 echo ""
 
 # ════════════════════════════════════════════════════════════════════════
-# 5 · ARDUINO MOTOR CONTROLLER
+# 5 · JOY → ARDUINO  (direct serial, replaces arduino_motor_controller)
 # ════════════════════════════════════════════════════════════════════════
-log "[5/5] Arduino motor controller..."
+log "[5/5] Joy-to-Arduino bridge..."
 
 ARDUINO_PORT=""
 for p in /dev/ttyACM0 /dev/ttyACM1 /dev/ttyUSB0; do
     [ -e "$p" ] && ARDUINO_PORT="$p" && break
 done
 
-if [ -n "$ARDUINO_PORT" ]; then
-    ros2 run lunar_robot_hardware arduino_motor_controller \
-        --ros-args -p arduino_port:="$ARDUINO_PORT" > /tmp/rover_arduino.log 2>&1 &
+JOY_SCRIPT=""
+for loc in "$(dirname "$0")/joy_to_arduino.py" ~/lunar_rover_ws/joy_to_arduino.py; do
+    [ -f "$loc" ] && JOY_SCRIPT="$loc" && break
+done
+
+if [ -z "$JOY_SCRIPT" ]; then
+    warn "joy_to_arduino.py not found — copy it to ~/lunar_rover_ws/"
+    warn "Motor control will NOT work"
+elif [ -n "$ARDUINO_PORT" ]; then
+    python3 "$JOY_SCRIPT" > /tmp/rover_arduino.log 2>&1 &
     sleep 2
-    ok "Arduino motor controller on $ARDUINO_PORT"
-    ok "Subscribing to /cmd_vel — laptop publishes, wheels respond"
+    ok "Joy→Arduino bridge running on $ARDUINO_PORT"
+    ok "Subscribing to /joy from laptop · direct serial · 20Hz rate-limited"
 else
     warn "No Arduino found at /dev/ttyACM0, /dev/ttyACM1, or /dev/ttyUSB0"
     warn "Motor controller NOT started — check USB cable"

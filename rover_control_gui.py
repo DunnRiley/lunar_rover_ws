@@ -632,12 +632,10 @@ class MissionControl(QWidget):
         if self._teleop_thread:
             self._teleop_thread.set_speed(spd)
 
-    # ── Actuator GUI buttons (also work via controller in TeleopPublisher) ─
+    # ── Actuator GUI buttons (supplement to controller bumpers) ──────────
     def _act_gui(self, value: int):
         if self._teleop_thread:
-            # Inject directly into the desired-state slot
-            with self._teleop_thread._lock:
-                self._teleop_thread._want_act = value
+            self._teleop_thread.send_actuator(value)
         labels = {1: "▲ Extending…", -1: "▼ Retracting…", 0: "Actuator: idle"}
         colors = {1: "#40c070",       -1: "#c04040",        0: "#607080"}
         self.act_status.setText(labels.get(value, ""))
