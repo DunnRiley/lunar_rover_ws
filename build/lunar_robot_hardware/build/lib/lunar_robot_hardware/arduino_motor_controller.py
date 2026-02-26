@@ -64,9 +64,17 @@ class ArduinoMotorController(Node):
         self.emergency        = False
 
         # ── Subscribers ──────────────────────────────────────────────────
-        self.create_subscription(Twist, '/cmd_vel',        self._cmd_vel_cb,  10)
+        # BEST_EFFORT + depth=1: always process only the freshest message,
+        # physically cannot accumulate a backlog of stale drive commands.
+        from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+        drive_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        self.create_subscription(Twist, '/cmd_vel',        self._cmd_vel_cb,  drive_qos)
+        self.create_subscription(Int8,  '/actuator_cmd',   self._actuator_cb, drive_qos)
         self.create_subscription(Bool,  '/emergency_stop', self._estop_cb,    10)
-        self.create_subscription(Int8,  '/actuator_cmd',   self._actuator_cb, 10)
 
         # ── Publishers ───────────────────────────────────────────────────
         self.status_pub = self.create_publisher(String, '/motor_status', 10)

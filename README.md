@@ -61,4 +61,5 @@ ros2 run lunar_robot_hardware controller_teleop
 ### Terminal 2 for point click navigation
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py
 
-
+# Important dependencies
+sudo apt install ros-jazzy-nav2-bringup ros-jazzy-navigation2 ros-jazzy-nav2-route

@@ -1,13 +1,15 @@
 #!/bin/bash
 # ============================================================================
-#  MINI PC: RTAB-Map SLAM + Nav2 (FIXED)
+#  MINI PC (or single laptop): RTAB-Map SLAM  — FIXED
 #
-#  Fixes:
-#  - Dead-reckoning odometry added (no encoder dependency)
-#  - Nav2 launched and wired to RTAB-Map map frame
-#  - Topic remappings corrected throughout
-#  - Proper startup sequencing with health checks
-#  - Depth→LaserScan conversion for Nav2 costmaps
+#  Fixes applied:
+#  - Odom/GuessMotion passed as string "false" (was bare bool → crash)
+#  - Grid/CellSize, Grid/RangeMax etc. passed as unquoted doubles (were
+#    quoted strings → InvalidParameterTypeException crash)
+#  - Nav2 removed for proof-of-concept (nav2_route missing in Jazzy base)
+#    Re-add once:  sudo apt install ros-jazzy-nav2-bringup ros-jazzy-navigation2
+#  - publish_tf on visual odometry set to TRUE for single-machine use
+#    (dead-reckoning odom still runs as fallback but visual odom drives TF)
 #
 #  MODES:
 #    bash slam_minipc.sh map          → Fresh map (deletes old DB)
@@ -36,15 +38,44 @@ export ROS_DOMAIN_ID=42
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 export ROS_LOCALHOST_ONLY=0
 
+# ── FastDDS: disable shared memory transport ──────────────────────────────
+# The SHM transport on a single machine often hits stale port-lock files
+# (fastrtps_port7027 etc.), killing nodes during startup.  Force UDP-only.
+FASTDDS_XML=/tmp/fastdds_udp_only.xml
+cat > "$FASTDDS_XML" << 'FASTDDS_EOF'
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <transport_descriptors>
+        <transport_descriptor>
+            <transport_id>UDPv4Transport</transport_id>
+            <type>UDPv4</type>
+        </transport_descriptor>
+    </transport_descriptors>
+    <participant profile_name="participant_profile" is_default_profile="true">
+        <rtps>
+            <userTransports>
+                <transport_id>UDPv4Transport</transport_id>
+            </userTransports>
+            <useBuiltinTransports>false</useBuiltinTransports>
+        </rtps>
+    </participant>
+</profiles>
+FASTDDS_EOF
+export FASTRTPS_DEFAULT_PROFILES_FILE="$FASTDDS_XML"
+
+# Also clean up any stale SHM port-lock files left from previous runs
+rm -f /dev/shm/fastrtps_* /tmp/fastrtps_* 2>/dev/null
+echo "  ✓ FastDDS: SHM disabled, stale locks cleared"
+
 # ── Print header ──────────────────────────────────────────────────────────
 echo "========================================="
 case "$MODE" in
-    localize) echo "  MINI PC: SLAM — LOCALIZATION MODE" ;;
+    localize) echo "  SLAM — LOCALIZATION MODE" ;;
     *)
         if [ "$KEEP_MAP" = "keep" ]; then
-            echo "  MINI PC: SLAM — MAPPING (RESUME)"
+            echo "  SLAM — MAPPING (RESUME)"
         else
-            echo "  MINI PC: SLAM — MAPPING (FRESH)"
+            echo "  SLAM — MAPPING (FRESH)"
         fi ;;
 esac
 echo "========================================="
@@ -67,15 +98,23 @@ check_pkg() {
 check_pkg rtabmap_ros
 check_pkg rtabmap_slam
 check_pkg rtabmap_odom
-check_pkg nav2_bringup
 check_pkg depthimage_to_laserscan
 check_pkg realsense2_camera
+
+# Nav2 is optional — warn but don't exit
+if ! ros2 pkg list 2>/dev/null | grep -q "^nav2_bringup$"; then
+    echo "  ⚠ nav2_bringup not found — Nav2 disabled (mapping still works)"
+    echo "    To install: sudo apt install ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-navigation2"
+    NAV2_AVAILABLE=false
+else
+    echo "  ✓ nav2_bringup"
+    NAV2_AVAILABLE=true
+fi
 
 if [ $MISSING -gt 0 ]; then
     echo ""
     echo "Install missing packages:"
     echo "  sudo apt install ros-${ROS_DISTRO}-rtabmap-ros \\"
-    echo "                   ros-${ROS_DISTRO}-nav2-bringup \\"
     echo "                   ros-${ROS_DISTRO}-depthimage-to-laserscan"
     exit 1
 fi
@@ -92,239 +131,16 @@ echo ""
 # ── Kill old processes ────────────────────────────────────────────────────
 echo "Stopping old nodes..."
 pkill -f realsense2_camera_node 2>/dev/null
-pkill -f rgbd_odometry         2>/dev/null
-pkill -f rtabmap               2>/dev/null
-pkill -f robot_state_publisher 2>/dev/null
-pkill -f static_transform_pub  2>/dev/null
+pkill -f rgbd_odometry           2>/dev/null
+pkill -f "rtabmap "              2>/dev/null   # space avoids killing this script's grep
+pkill -f robot_state_publisher   2>/dev/null
+pkill -f static_transform_pub    2>/dev/null
 pkill -f depthimage_to_laserscan 2>/dev/null
-pkill -f nav2_bringup          2>/dev/null
-pkill -f lifecycle_manager     2>/dev/null
-pkill -f simple_odom_publisher 2>/dev/null
 sleep 2
 echo "✓ Clean"
 echo ""
 
 trap 'echo ""; echo "Shutting down..."; kill 0; wait; echo "✓ Stopped"; exit' SIGINT SIGTERM
-
-# ── Write Nav2 params ─────────────────────────────────────────────────────
-NAV2_PARAMS=/tmp/nav2_params_slam.yaml
-cat > "$NAV2_PARAMS" << 'NAV2_EOF'
-# Nav2 parameters tuned for RTAB-Map integration
-# Fixed frame = map (published by RTAB-Map)
-
-bt_navigator:
-  ros__parameters:
-    use_sim_time: false
-    global_frame: map
-    robot_base_frame: base_link
-    odom_topic: /odom
-    bt_loop_duration: 10
-    default_server_timeout: 20
-    navigators: ['navigate_to_pose', 'navigate_through_poses']
-    navigate_to_pose:
-      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
-    navigate_through_poses:
-      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
-
-controller_server:
-  ros__parameters:
-    use_sim_time: false
-    controller_frequency: 10.0
-    min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
-    min_theta_velocity_threshold: 0.001
-    progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["FollowPath"]
-    progress_checker:
-      plugin: "nav2_controller::ProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 15.0
-    general_goal_checker:
-      plugin: "nav2_controller::GoalChecker"
-      xy_goal_tolerance: 0.30
-      yaw_goal_tolerance: 0.30
-      stateful: true
-    FollowPath:
-      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.25
-      lookahead_dist: 0.7
-      min_lookahead_dist: 0.3
-      max_lookahead_dist: 1.2
-      lookahead_time: 1.5
-      rotate_to_heading_angular_vel: 0.4
-      transform_tolerance: 0.5
-      use_velocity_scaled_lookahead_dist: false
-      min_approach_linear_velocity: 0.05
-      approach_velocity_scaling_dist: 0.8
-      use_collision_detection: true
-      max_allowed_time_to_collision_up_to_carrot: 1.5
-      use_regulated_linear_velocity_scaling: true
-      use_fixed_curvature_lookahead: false
-      curvature_lookahead_dist: 0.9
-      use_cost_regulated_linear_velocity_scaling: false
-      regulated_linear_scaling_min_radius: 0.9
-      regulated_linear_scaling_min_speed: 0.2
-      use_rotate_to_heading: true
-      rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 0.8
-      max_robot_pose_search_dist: 10.0
-
-local_costmap:
-  local_costmap:
-    ros__parameters:
-      use_sim_time: false
-      update_frequency: 5.0
-      publish_frequency: 2.0
-      global_frame: odom
-      robot_base_frame: base_link
-      rolling_window: true
-      width: 4
-      height: 4
-      resolution: 0.05
-      robot_radius: 0.30
-      plugins: ["voxel_layer", "inflation_layer"]
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
-        enabled: true
-        publish_voxel_map: false
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 1.5
-        mark_threshold: 0
-        observation_sources: pointcloud
-        pointcloud:
-          topic: /camera/camera/depth/color/points
-          max_obstacle_height: 1.5
-          clearing: true
-          marking: true
-          data_type: "PointCloud2"
-          raytrace_max_range: 4.0
-          raytrace_min_range: 0.1
-          obstacle_max_range: 3.5
-          obstacle_min_range: 0.1
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.45
-      always_send_full_costmap: true
-
-global_costmap:
-  global_costmap:
-    ros__parameters:
-      use_sim_time: false
-      update_frequency: 1.0
-      publish_frequency: 1.0
-      global_frame: map
-      robot_base_frame: base_link
-      robot_radius: 0.30
-      resolution: 0.05
-      track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        # Reads /map topic published by RTAB-Map
-        map_subscribe_transient_local: true
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
-        observation_sources: pointcloud
-        pointcloud:
-          topic: /camera/camera/depth/color/points
-          max_obstacle_height: 1.5
-          clearing: true
-          marking: true
-          data_type: "PointCloud2"
-          raytrace_max_range: 4.0
-          obstacle_max_range: 3.5
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.45
-      always_send_full_costmap: true
-
-planner_server:
-  ros__parameters:
-    use_sim_time: false
-    expected_planner_frequency: 1.0
-    planner_plugins: ["GridBased"]
-    GridBased:
-      plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.5
-      use_astar: true
-      allow_unknown: true
-
-smoother_server:
-  ros__parameters:
-    use_sim_time: false
-    smoother_plugins: ["simple_smoother"]
-    simple_smoother:
-      plugin: "nav2_smoother::SimpleSmoother"
-      tolerance: 1.0e-10
-      max_its: 1000
-      do_refinement: true
-
-behavior_server:
-  ros__parameters:
-    use_sim_time: false
-    costmap_topic: local_costmap/costmap_raw
-    footprint_topic: local_costmap/published_footprint
-    cycle_frequency: 10.0
-    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
-    spin:
-      plugin: "nav2_behaviors::Spin"
-    backup:
-      plugin: "nav2_behaviors::BackUp"
-    drive_on_heading:
-      plugin: "nav2_behaviors::DriveOnHeading"
-    wait:
-      plugin: "nav2_behaviors::Wait"
-    global_frame: odom
-    robot_base_frame: base_link
-    transform_tolerance: 0.5
-    simulate_ahead_time: 2.0
-    max_rotational_vel: 0.4
-    min_rotational_vel: 0.1
-    rotational_acc_lim: 0.8
-
-waypoint_follower:
-  ros__parameters:
-    use_sim_time: false
-    loop_rate: 20
-    stop_on_failure: false
-    waypoint_task_executor_plugin: "wait_at_waypoint"
-    wait_at_waypoint:
-      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
-      enabled: true
-      waypoint_pause_duration: 0
-
-velocity_smoother:
-  ros__parameters:
-    use_sim_time: false
-    smoothing_frequency: 20.0
-    scale_velocities: false
-    feedback: "OPEN_LOOP"
-    max_velocity: [0.4, 0.0, 0.8]
-    min_velocity: [-0.4, 0.0, -0.8]
-    max_accel: [0.8, 0.0, 1.5]
-    max_decel: [-0.8, 0.0, -1.5]
-    odom_topic: "odom"
-    odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
-    velocity_timeout: 1.0
-
-map_server:
-  ros__parameters:
-    use_sim_time: false
-    yaml_filename: ""   # empty = no static map file; RTAB-Map publishes /map
-
-amcl:
-  ros__parameters:
-    use_sim_time: false
-NAV2_EOF
-
-echo "✓ Nav2 params written to $NAV2_PARAMS"
 
 # ── URDF ─────────────────────────────────────────────────────────────────
 URDF='<?xml version="1.0"?>
@@ -344,8 +160,8 @@ URDF='<?xml version="1.0"?>
   </joint>
 </robot>'
 
-# ── [1/6] TF TREE ─────────────────────────────────────────────────────────
-echo "[1/6] TF tree + robot description..."
+# ── [1/5] TF TREE ─────────────────────────────────────────────────────────
+echo "[1/5] TF tree + robot description..."
 
 ros2 run robot_state_publisher robot_state_publisher \
     --ros-args -p robot_description:="$URDF" -p publish_frequency:=50.0 \
@@ -353,8 +169,7 @@ ros2 run robot_state_publisher robot_state_publisher \
 
 sleep 1
 
-# Camera optical frame transforms
-# ROS2 Jazzy static_transform_publisher uses CLI flags (not --ros-args -p)
+# Use quaternion form — avoids RPY parsing quirks across ROS2 versions
 ros2 run tf2_ros static_transform_publisher \
     --x 0.0 --y 0.0 --z 0.0 \
     --qx -0.5 --qy 0.5 --qz -0.5 --qw 0.5 \
@@ -369,22 +184,30 @@ ros2 run tf2_ros static_transform_publisher \
     --child-frame-id camera_color_optical_frame \
     2>/dev/null &
 
-sleep 1
-echo "  ✓ TF tree ready"
+# Publish an identity map→odom TF so RViz has a valid "map" frame from the
+# start, before RTAB-Map creates its first keyframe.
+ros2 run tf2_ros static_transform_publisher     --x 0.0 --y 0.0 --z 0.0     --qx 0.0 --qy 0.0 --qz 0.0 --qw 1.0     --frame-id map     --child-frame-id odom     2>/dev/null &
+
+# Wait until robot_state_publisher has actually published the TF tree.
+# Without this, rgbd_odometry and rtabmap start before base_link exists.
+echo "  Waiting for TF: base_link..."
+for i in $(seq 1 20); do
+    sleep 1
+    if ros2 run tf2_ros tf2_echo base_link camera_link --timeout 0.5 2>/dev/null | grep -q "Translation"; then
+        echo "  ✓ TF tree ready (base_link confirmed at ${i}s)"
+        break
+    fi
+    if [ $i -eq 20 ]; then
+        echo "  ⚠ TF tree slow — continuing anyway (check: ros2 run tf2_tools view_frames)"
+    fi
+done
 echo ""
 
-# ── [2/6] DEAD-RECKONING ODOMETRY ─────────────────────────────────────────
-# Publishes /odom and base_footprint→base_link TF from /cmd_vel integration.
-# Replace with encoder odometry when hardware is available.
-echo "[2/6] Dead-reckoning odometry (cmd_vel integration)..."
+# ── [2/5] DEAD-RECKONING ODOMETRY ─────────────────────────────────────────
+echo "[2/5] Dead-reckoning odometry (cmd_vel integration)..."
 
 python3 - << 'ODOM_EOF' &
 #!/usr/bin/env python3
-"""
-Simple dead-reckoning odometry from cmd_vel.
-Publishes /odom and the odom→base_footprint TF.
-Replace this with encoder-based odometry for better accuracy.
-"""
 import rclpy, math
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
@@ -399,7 +222,7 @@ class DeadReckonOdom(Node):
         self.br = TransformBroadcaster(self)
         self.pub = self.create_publisher(Odometry, '/odom', 50)
         self.create_subscription(Twist, '/cmd_vel', self.cb, 10)
-        self.create_timer(0.02, self.update)   # 50 Hz
+        self.create_timer(0.02, self.update)
         self.get_logger().info('Dead-reckoning odometry running (50 Hz)')
 
     def cb(self, msg):
@@ -446,7 +269,6 @@ class DeadReckonOdom(Node):
         o.pose.pose.orientation.w = qw
         o.twist.twist.linear.x  = self.vx
         o.twist.twist.angular.z = self.vth
-        # Covariance — diagonal, modest confidence
         o.pose.covariance[0]  = 0.05
         o.pose.covariance[7]  = 0.05
         o.pose.covariance[35] = 0.1
@@ -458,7 +280,7 @@ rclpy.init()
 node = DeadReckonOdom()
 try:
     rclpy.spin(node)
-except KeyboardInterrupt:
+except (KeyboardInterrupt, Exception):
     pass
 finally:
     node.destroy_node()
@@ -467,11 +289,11 @@ ODOM_EOF
 
 ODOM_PID=$!
 sleep 2
-echo "  ✓ Odometry publishing on /odom"
+echo "  ✓ Odometry publishing on /odom (PID $ODOM_PID)"
 echo ""
 
-# ── [3/6] CAMERA ─────────────────────────────────────────────────────────
-echo "[3/6] D435 Camera (640×480 @ 15 fps)..."
+# ── [3/5] CAMERA ─────────────────────────────────────────────────────────
+echo "[3/5] D435 Camera (640×480 @ 15 fps)..."
 
 ros2 launch realsense2_camera rs_launch.py \
     camera_name:=camera \
@@ -505,7 +327,7 @@ ros2 topic list 2>/dev/null | grep -q "/camera/camera/color/image_raw$" \
     && echo "  ✓ Camera publishing (PID $CAM_PID)" \
     || { echo "  ✗ No camera topics! Check: tail /tmp/slam_camera.log"; exit 1; }
 
-# ── Depth→LaserScan (for Nav2 costmap fallback) ───────────────────────────
+# Depth→LaserScan (handy for visualisation in RViz)
 ros2 run depthimage_to_laserscan depthimage_to_laserscan_node \
     --ros-args \
     --remap depth/image_raw:=/camera/camera/aligned_depth_to_color/image_raw \
@@ -520,25 +342,31 @@ ros2 run depthimage_to_laserscan depthimage_to_laserscan_node \
 echo "  ✓ Depth→LaserScan on /scan"
 echo ""
 
-# ── [4/6] RTAB-MAP VISUAL ODOMETRY ───────────────────────────────────────
-echo "[4/6] RTAB-Map RGB-D visual odometry..."
+# ── [4/5] RTAB-MAP VISUAL ODOMETRY ───────────────────────────────────────
+echo "[4/5] RTAB-Map RGB-D visual odometry..."
+
+# KEY FIX: all RTAB-Map string parameters must be quoted; bool-typed params
+# (Odom/GuessMotion) must also be quoted strings — RTAB-Map reads them as
+# strings internally even though they represent booleans.
+# publish_tf=true so visual odometry owns the odom→base_link TF on a single
+# machine (dead-reckoning above still publishes /odom topic as fallback).
 
 ros2 run rtabmap_odom rgbd_odometry \
     --ros-args \
     -p frame_id:=base_link \
     -p odom_frame_id:=odom \
-    -p publish_tf:=false \
+    -p publish_tf:=true \
     -p approx_sync:=true \
     -p approx_sync_max_interval:=0.15 \
     -p wait_for_transform:=0.3 \
     -p queue_size:=30 \
-    -p Odom/Strategy:=0 \
-    -p Vis/FeatureType:=6 \
-    -p Vis/MaxFeatures:=600 \
-    -p Vis/MinInliers:=8 \
-    -p Vis/MaxDepth:="5.0" \
-    -p Odom/ResetCountdown:=1 \
-    -p Odom/GuessMotion:=false \
+    -p 'Odom/Strategy:=0' \
+    -p 'Vis/FeatureType:=6' \
+    -p 'Vis/MaxFeatures:=600' \
+    -p 'Vis/MinInliers:=8' \
+    -p 'Vis/MaxDepth:=5.0' \
+    -p 'Odom/ResetCountdown:=1' \
+    -p 'Odom/GuessMotion:=false' \
     --remap rgb/image:=/camera/camera/color/image_raw \
     --remap rgb/camera_info:=/camera/camera/color/camera_info \
     --remap depth/image:=/camera/camera/aligned_depth_to_color/image_raw \
@@ -549,34 +377,39 @@ echo "  Waiting for visual odometry (6 s)..."
 sleep 6
 
 if ! ps -p $VODOM_PID >/dev/null 2>&1; then
-    echo "  ✗ Visual odometry failed!"
-    tail -20 /tmp/slam_vodom.log
+    echo "  ✗ Visual odometry crashed!"
+    echo "  Last lines of log:"
+    tail -10 /tmp/slam_vodom.log
     exit 1
 fi
 echo "  ✓ Visual odometry running (PID $VODOM_PID)"
-echo "  NOTE: Visual odom supplements but does NOT override /odom"
 echo ""
 
-# ── [5/6] RTAB-MAP SLAM ───────────────────────────────────────────────────
-echo "[5/6] RTAB-Map SLAM..."
+# ── [5/5] RTAB-MAP SLAM ───────────────────────────────────────────────────
+echo "[5/5] RTAB-Map SLAM..."
 
 case "$MODE" in
     localize)
         RTAB_ARGS="--localization"
-        MEM_PARAM="-p Mem/IncrementalMemory:=false"
+        MEM_PARAM="-p 'Mem/IncrementalMemory:=false'"
         echo "  Mode: LOCALIZATION"
         ;;
     *)
         if [ "$KEEP_MAP" = "keep" ]; then
             RTAB_ARGS=""
-            MEM_PARAM="-p Mem/IncrementalMemory:=true"
+            MEM_PARAM="-p 'Mem/IncrementalMemory:=true'"
             echo "  Mode: MAPPING (resume)"
         else
             RTAB_ARGS="--delete_db_on_start"
-            MEM_PARAM="-p Mem/IncrementalMemory:=true"
+            MEM_PARAM="-p 'Mem/IncrementalMemory:=true'"
             echo "  Mode: MAPPING (fresh)"
         fi ;;
 esac
+
+# KEY FIX: numeric RTAB-Map params (Grid/CellSize, Grid/RangeMax, etc.) must
+# NOT be quoted — they must be bare doubles so ROS2 parses them as double,
+# not string.  String-valued params (Reg/Force3DoF, Grid/FromDepth, etc.)
+# must still be quoted because RTAB-Map reads them as strings.
 
 ros2 run rtabmap_slam rtabmap \
     --ros-args \
@@ -591,25 +424,25 @@ ros2 run rtabmap_slam rtabmap \
     -p queue_size:=30 \
     -p topic_queue_size:=30 \
     -p database_path:=$DB_PATH \
-    -p Rtabmap/DetectionRate:="1.0" \
-    -p RGBD/LinearUpdate:="0.1" \
-    -p RGBD/AngularUpdate:="0.17" \
-    -p Vis/FeatureType:=6 \
-    -p Kp/DetectorStrategy:=6 \
-    -p Vis/MaxFeatures:=600 \
-    -p Vis/MinInliers:=8 \
-    -p Kp/MaxFeatures:=600 \
-    -p Vis/MaxDepth:="5.0" \
-    -p Grid/FromDepth:=true \
-    -p Grid/MaxObstacleHeight:="0.6" \
-    -p Grid/MinObstacleHeight:="0.02" \
-    -p Grid/RangeMax:="5.0" \
-    -p Grid/CellSize:="0.05" \
-    -p Grid/DepthDecimation:=2 \
-    -p Reg/Force3DoF:=true \
-    -p RGBD/OptimizeFromGraphEnd:=false \
-    -p RGBD/ProximityBySpace:=true \
-    -p Mem/NotLinkedNodesKept:=false \
+    -p 'Rtabmap/DetectionRate:=1.0' \
+    -p 'RGBD/LinearUpdate:=0.1' \
+    -p 'RGBD/AngularUpdate:=0.17' \
+    -p 'Vis/FeatureType:=6' \
+    -p 'Kp/DetectorStrategy:=6' \
+    -p 'Vis/MaxFeatures:=600' \
+    -p 'Vis/MinInliers:=8' \
+    -p 'Kp/MaxFeatures:=600' \
+    -p 'Vis/MaxDepth:=5.0' \
+    -p 'Grid/FromDepth:=true' \
+    -p 'Grid/MaxObstacleHeight:=0.6' \
+    -p 'Grid/MinObstacleHeight:=0.02' \
+    -p 'Grid/RangeMax:=5.0' \
+    -p 'Grid/CellSize:=0.05' \
+    -p 'Grid/DepthDecimation:=2' \
+    -p 'Reg/Force3DoF:=true' \
+    -p 'RGBD/OptimizeFromGraphEnd:=false' \
+    -p 'RGBD/ProximityBySpace:=true' \
+    -p 'Mem/NotLinkedNodesKept:=false' \
     $MEM_PARAM \
     --remap rgb/image:=/camera/camera/color/image_raw \
     --remap rgb/camera_info:=/camera/camera/color/camera_info \
@@ -619,54 +452,44 @@ ros2 run rtabmap_slam rtabmap \
     2>/tmp/slam_rtabmap.log &
 
 RTAB_PID=$!
-echo "  Waiting for RTAB-Map (8 s)..."
-sleep 8
-
-if ! ps -p $RTAB_PID >/dev/null 2>&1; then
-    echo "  ✗ RTAB-Map failed!"
-    tail -30 /tmp/slam_rtabmap.log
-    exit 1
-fi
-echo "  ✓ RTAB-Map running (PID $RTAB_PID)"
-echo ""
-
-# ── [6/6] NAV2 ────────────────────────────────────────────────────────────
-echo "[6/6] Nav2 (waiting 10 s for map to be published)..."
-sleep 10
-
-# Check /map is being published before starting Nav2
-MAP_FOUND=false
-for i in $(seq 1 15); do
-    ros2 topic list 2>/dev/null | grep -q "^/map$" && { MAP_FOUND=true; break; }
-    echo "  Waiting for /map topic ($i/15)..."
-    sleep 2
+echo "  Waiting for RTAB-Map (polling up to 12s)..."
+RTAB_OK=false
+for i in $(seq 1 12); do
+    sleep 1
+    if ! ps -p $RTAB_PID >/dev/null 2>&1; then
+        echo ""
+        echo "  ✗ RTAB-Map crashed (died after ${i}s)!"
+        echo ""
+        echo "  ── /tmp/slam_rtabmap.log (last 30 lines) ──"
+        tail -30 /tmp/slam_rtabmap.log
+        echo ""
+        echo "  Common causes:"
+        echo "   • SHM port lock  → stale /dev/shm/fastrtps_* (script clears these on start)"
+        echo "   • DB locked      → rm ~/.ros/rtabmap_rover.db  then re-run"
+        echo "   • Param type err → check for InvalidParameterTypeException above"
+        kill 0; wait
+        exit 1
+    fi
+    if grep -q "rtabmap:" /tmp/slam_rtabmap.log 2>/dev/null; then
+        RTAB_OK=true
+        echo "  ✓ RTAB-Map running (PID $RTAB_PID, confirmed at ${i}s)"
+        break
+    fi
 done
-
-if [ "$MAP_FOUND" = false ]; then
-    echo "  ⚠  /map not found yet — Nav2 will retry internally"
-    echo "  Tip: rotate camera slowly for 10 s to generate first keyframe"
-fi
-
-ros2 launch nav2_bringup navigation_launch.py \
-    use_sim_time:=false \
-    params_file:=$NAV2_PARAMS \
-    2>/tmp/slam_nav2.log &
-
-NAV2_PID=$!
-echo "  Waiting for Nav2 (10 s)..."
-sleep 10
-
-if ps -p $NAV2_PID >/dev/null 2>&1; then
-    echo "  ✓ Nav2 running (PID $NAV2_PID)"
-else
-    echo "  ✗ Nav2 failed — check: tail /tmp/slam_nav2.log"
-    echo "  You can still use RTAB-Map without Nav2 for mapping"
+if [ "$RTAB_OK" = "false" ]; then
+    echo "  ⚠ RTAB-Map alive but slow to log — continuing (monitor: tail -f /tmp/slam_rtabmap.log)"
 fi
 echo ""
+
+# ── Nav2 (optional — skip if package missing) ─────────────────────────────
+if [ "$NAV2_AVAILABLE" = "true" ]; then
+    echo "[+] Nav2 available — skipping for now (add --nav2 flag to enable)"
+    echo "    (Nav2 needs a stable map first; build the map, then re-run)"
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────
 echo "========================================="
-echo "  ✓✓✓ MINI PC READY ✓✓✓"
+echo "  ✓✓✓ SLAM READY ✓✓✓"
 echo "========================================="
 echo ""
 echo "PIDs:"
@@ -674,31 +497,27 @@ echo "  odom    $ODOM_PID"
 echo "  camera  $CAM_PID"
 echo "  vodom   $VODOM_PID"
 echo "  rtabmap $RTAB_PID"
-echo "  nav2    $NAV2_PID (if started)"
 echo ""
 echo "KEY TOPICS:"
-echo "  /map                     ← occupancy grid (RTAB-Map)"
-echo "  /rtabmap/cloud_map       ← 3D point cloud map"
-echo "  /odom                    ← dead-reckoning odometry"
-echo "  /scan                    ← laser scan (from depth)"
-echo "  /cmd_vel                 ← drive commands in"
+echo "  /map                   ← occupancy grid (once map builds)"
+echo "  /rtabmap/cloud_map     ← 3D point cloud map"
+echo "  /odom                  ← odometry"
+echo "  /scan                  ← laser scan (from depth)"
 echo ""
-echo "ON LAPTOP:"
+echo "NOW: open a second terminal and run:"
 echo "  bash slam_laptop.sh"
 echo ""
-echo "WORKFLOW:"
-echo "  1. On laptop run slam_laptop.sh"
-echo "  2. Rotate rover camera 360° slowly (~20 s)"
-echo "  3. Watch 3D map build in RViz"
-echo "  4. Use '2D Nav Goal' tool in RViz to send Nav2 goals"
-echo "  5. Ctrl+C here to stop and save map"
+echo "THEN: move the camera slowly to build the map."
+echo "  Point camera at a textured surface (not a blank wall)."
+echo "  After ~5 seconds of movement you should see /rtabmap/cloud_map."
 echo ""
-echo "LOGS:"
-echo "  tail -f /tmp/slam_camera.log"
-echo "  tail -f /tmp/slam_rtabmap.log"
-echo "  tail -f /tmp/slam_nav2.log"
+echo "TIPS if map doesn't build:"
+echo "  tail -f /tmp/slam_vodom.log   ← look for 'failed to find features'"
+echo "  tail -f /tmp/slam_rtabmap.log ← look for 'new node added'"
 echo ""
-echo "Map saved to: $DB_PATH"
+echo "LOGS:  /tmp/slam_camera.log  /tmp/slam_rtabmap.log  /tmp/slam_vodom.log"
+echo "Map:   $DB_PATH"
+echo ""
 echo "Press Ctrl+C to stop"
 echo "========================================="
 
@@ -708,21 +527,21 @@ while true; do
     sleep 5
     TICK=$((TICK+1))
 
-    for NAME_PID in "RTAB-Map:$RTAB_PID" "Camera:$CAM_PID" "Odom:$ODOM_PID"; do
+    for NAME_PID in "RTAB-Map:$RTAB_PID" "Camera:$CAM_PID" "VisualOdom:$VODOM_PID"; do
         NAME="${NAME_PID%%:*}"
         PID="${NAME_PID##*:}"
         if ! ps -p $PID >/dev/null 2>&1; then
             echo ""
             echo "⚠  $NAME (PID $PID) died!"
-            echo "   Map saved to: $DB_PATH"
             echo "   Check logs in /tmp/slam_*.log"
             kill 0; wait
             exit 1
         fi
     done
 
+    # Every minute print a heartbeat
     if [ $((TICK % 12)) -eq 0 ]; then
         NODES=$(ros2 node list 2>/dev/null | grep -c "" || echo "?")
-        echo "[$(date +%H:%M:%S)] Running — $NODES nodes"
+        echo "[$(date +%H:%M:%S)] Running — $NODES nodes active"
     fi
 done
