@@ -1,8 +1,8 @@
 # lunar_rover_ws
-## Connect to moonpie MiniPC
-### MiniPC is named moonpie and has a static IP of 192.168.0.102
+## Connect to cheese MiniPC
+### MiniPC is named cheese and has a static IP of 192.168.0.102
 ### run on laptop
-ssh moonpie@192.168.0.102
+ssh cheese@192.168.0.102
 
 ### note all code is on the MiniPC and laptop. Both computers have to be on the same Wifi
 
@@ -28,7 +28,7 @@ python3 rover_launcher.py
 
 ## Split launch for cameras's
 - MiniPC:
-ssh moonpie@IP
+ssh cheese@IP
 bash mini_pc_launch.sh
 
 - 2nd Terminal MiniPC:

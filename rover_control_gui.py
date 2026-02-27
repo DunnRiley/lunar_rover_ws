@@ -24,7 +24,7 @@ except ImportError:
     ROS_AVAILABLE = False
 
 # ── CONFIG ────────────────────────────────────────────────────────────────
-MINIPC_USER = "moonpie"
+MINIPC_USER = "cheese"
 MINIPC_IP   = "192.168.0.102"
 MINIPC_WS   = "~/lunar_rover_ws"
 RVIZ_CONFIG = os.path.expanduser("~/lunar_rover_ws/laptop_stream.rviz")

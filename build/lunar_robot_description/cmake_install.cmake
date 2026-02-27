@@ -1,8 +1,8 @@
-# Install script for directory: /home/rileydunn/lunar_rover_ws/src/lunar_robot_description
+# Install script for directory: /home/cheese/lunar_rover_ws/src/lunar_robot_description
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/home/rileydunn/lunar_rover_ws/install/lunar_robot_description")
+  set(CMAKE_INSTALL_PREFIX "/home/cheese/lunar_rover_ws/install/lunar_robot_description")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -43,7 +43,7 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  include("/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_symlink_install/ament_cmake_symlink_install.cmake")
+  include("/home/cheese/lunar_rover_ws/build/lunar_robot_description/ament_cmake_symlink_install/ament_cmake_symlink_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)
@@ -54,5 +54,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/cheese/lunar_rover_ws/build/lunar_robot_description/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

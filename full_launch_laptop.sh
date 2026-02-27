@@ -17,7 +17,7 @@ warn() { echo -e "${YELLOW}  ⚠${NC} $1"; }
 err()  { echo -e "${RED}  ✗${NC} $1"; }
 
 # ── CONFIG — edit these if your network changes ──────────────────────────
-MINIPC_USER="moonpie"
+MINIPC_USER="cheese"
 MINIPC_IP="192.168.0.102"
 MINIPC_WS="~/lunar_rover_ws"
 MINIPC_LAUNCH="bash ~/lunar_rover_ws/full_launch_minipc.sh"
