@@ -15,10 +15,7 @@ source install/setup.bash
 bash full_launch_laptop.sh --start-minipc
 
 ## SLAM with RTAB-mapping (Not Implemented)
-- MiniPC:
-bash slam_minipc.sh mapping
-
-- Laptop:
+python3 slam_launch.py
 bash slam_laptop.sh
 
 ######################################### OLD #########################################
