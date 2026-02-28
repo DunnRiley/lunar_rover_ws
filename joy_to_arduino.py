@@ -19,10 +19,29 @@ Protocol: [0xAA][Device][Speed][Direction][0x55]
   0x06  RIGHT side (FR+BR)
   0x08  Both actuators
   0xFF  STOP ALL
+"""
 
-NOTE: Motors are mirrored left-to-right on this rover.
-      LEFT and RIGHT direction bytes are inverted to compensate.
-      Forward/backward axis is also inverted to match physical orientation.
+import rclpy#!/usr/bin/env python3
+"""
+joy_to_arduino.py  —  runs on the MINI PC
+Subscribes to /joy (published by laptop's joy_node over DDS),
+writes directly to Arduino serial. No cmd_vel middleman.
+
+Architecture:
+  Laptop:  joy_node → /joy  (raw USB controller, sent over DDS)
+  MiniPC:  joy_to_arduino.py → serial → Arduino
+
+Why this is better than laptop→cmd_vel→miniPC→serial:
+  - One fewer network hop for motor commands
+  - Serial writes happen locally, no laptop queue buildup
+  - Joy arrives at ~50Hz but we only write serial when values CHANGE
+  - Rate-limited to MAX_SERIAL_HZ to never overflow Arduino buffer
+
+Protocol: [0xAA][Device][Speed][Direction][0x55]
+  0x05  LEFT  side (FL+BL)
+  0x06  RIGHT side (FR+BR)
+  0x08  Both actuators
+  0xFF  STOP ALL
 """
 
 import rclpy
@@ -52,24 +71,42 @@ BTN_B      = 1    # B → speed down
 BTN_START  = 7    # Emergency stop toggle
 
 # ── Tuning ────────────────────────────────────────────────────────────────
+from rclpy.node import Node
+from sensor_msgs.msg import Joy
+from std_msgs.msg import Bool
+import serial
+import time
+import threading
+import glob
+
+# ── Serial protocol ───────────────────────────────────────────────────────
+START      = 0xAA
+END        = 0x55
+DEV_LEFT   = 0x05   # FL + BL together
+DEV_RIGHT  = 0x06   # FR + BR together
+DEV_ACT    = 0x08   # Both actuators
+DEV_KILL   = 0xFF
+
+# ── Controller mapping ────────────────────────────────────────────────────
+AXIS_FWD   = 1    # Left  stick Y  (+1 = forward)
+AXIS_TURN  = 3    # Right stick X  (+1 = left)
+BTN_LB     = 4    # Left  bumper → actuator extend
+BTN_RB     = 5    # Right bumper → actuator retract
+BTN_X      = 2    # X → speed up
+BTN_B      = 1    # B → speed down
+BTN_START  = 7    # Emergency stop toggle
+
+# ── Tuning ────────────────────────────────────────────────────────────────
 DEADZONE       = 0.10
 ANGULAR_SCALE  = 1.2
 MAX_MOTOR      = 200    # 0-255, cap to leave headroom
-MAX_SERIAL_HZ  = 20     # max serial writes per second
+MAX_SERIAL_HZ  = 20     # max serial writes per second — Arduino can handle ~200/s
+                        # but 20Hz gives plenty of margin and feels responsive
 MIN_SERIAL_GAP = 1.0 / MAX_SERIAL_HZ
 
 SPEED_START    = 0.50
 SPEED_STEP     = 0.05
 JOY_TIMEOUT    = 0.5    # stop motors if no /joy message for this long
-
-# ── Motor inversion flags (mirrored motor mount) ──────────────────────────
-# Set to True if that side's physical wiring runs opposite to expected.
-# With fully mirrored left/right mounts, both sides need inversion.
-INVERT_LEFT  = True
-INVERT_RIGHT = True
-# Forward stick axis: positive stick = forward on the robot.
-# If the rover drives backward when you push forward, flip this.
-INVERT_FWD   = True
 
 
 class JoyToArduino(Node):
@@ -93,7 +130,7 @@ class JoyToArduino(Node):
         self._last_right = (0, 0)
         self._last_act   = (0, 0)
 
-        # Rate limiter
+        # Rate limiter: don't write serial faster than MAX_SERIAL_HZ
         self._last_write = 0.0
 
         # ── Subscriptions ────────────────────────────────────────────────
@@ -106,7 +143,6 @@ class JoyToArduino(Node):
         self.get_logger().info('=' * 50)
         self.get_logger().info('Joy → Arduino  (direct serial, miniPC)')
         self.get_logger().info(f'Serial: {port}  |  Max rate: {MAX_SERIAL_HZ}Hz')
-        self.get_logger().info(f'Motor inversion — Left: {INVERT_LEFT}  Right: {INVERT_RIGHT}  Fwd: {INVERT_FWD}')
         self.get_logger().info('Left stick=drive  RStick=turn')
         self.get_logger().info('LB=extend  RB=retract  X=spd+  B=spd-  Start=estop')
         self.get_logger().info('=' * 50)
@@ -138,21 +174,14 @@ class JoyToArduino(Node):
         self._last_right = (0, 0)
         self._last_act   = (0, 0)
 
-    # ── Drive output ──────────────────────────────────────────────────────
+    # ── Drive output — only writes serial when value changes ─────────────
 
     def _set_drive(self, left_f: float, right_f: float):
         """
         left_f / right_f in [-1.0, 1.0].
-        Applies per-side inversion for mirrored motor mounts.
         Converts to (speed_byte, dir_byte), skips write if unchanged.
         Rate-limited to MAX_SERIAL_HZ.
         """
-        # Apply inversion for mirrored motor mounts
-        if INVERT_LEFT:
-            left_f = -left_f
-        if INVERT_RIGHT:
-            right_f = -right_f
-
         def to_sd(v):
             spd = min(int(abs(v) * MAX_MOTOR), 255)
             d   = 0 if v >= 0 else 1
@@ -215,11 +244,12 @@ class JoyToArduino(Node):
                 self.get_logger().info('Emergency stop cleared')
 
         if self._emergency:
+            # Consume edge detection so buttons don't fire on resume
             for b in (BTN_LB, BTN_RB, BTN_X, BTN_B):
                 self._prev_btns[b] = btn(b)
             return
 
-        # Speed adjust
+        # Speed adjust — rising edge only, one step per click
         if self._rising(BTN_X, btn(BTN_X)):
             self._speed = round(min(1.0, self._speed + SPEED_STEP), 2)
             self.get_logger().info(f'Speed: {self._speed:.2f}')
@@ -228,7 +258,7 @@ class JoyToArduino(Node):
             self._speed = round(max(0.05, self._speed - SPEED_STEP), 2)
             self.get_logger().info(f'Speed: {self._speed:.2f}')
 
-        # Actuators
+        # Actuators — hold LB or RB, stop when neither held
         lb = btn(BTN_LB)
         rb = btn(BTN_RB)
         if lb:
@@ -238,12 +268,9 @@ class JoyToArduino(Node):
         else:
             self._set_actuator(0)
 
-        # Drive — apply forward inversion for mirrored orientation
+        # Drive — differential mix, change-detected, rate-limited
         fwd  = self._dz(ax(AXIS_FWD))
         turn = self._dz(ax(AXIS_TURN))
-
-        if INVERT_FWD:
-            fwd = -fwd
 
         left  = (fwd - turn * ANGULAR_SCALE) * self._speed
         right = (fwd + turn * ANGULAR_SCALE) * self._speed
@@ -287,30 +314,17 @@ class JoyToArduino(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    # Auto-detect Arduino port — retry for up to 30s so USB has time to enumerate
-    USB_WAIT_TIMEOUT = 30.0   # seconds to wait before giving up
-    USB_POLL_INTERVAL = 2.0   # seconds between retries
+    # Auto-detect Arduino port
+    ports = []
+    for pattern in ['/dev/ttyACM*', '/dev/ttyUSB*']:
+        ports.extend(glob.glob(pattern))
 
-    port = None
-    deadline = time.time() + USB_WAIT_TIMEOUT
-    while time.time() < deadline:
-        ports = []
-        for pattern in ['/dev/ttyACM*', '/dev/ttyUSB*']:
-            ports.extend(glob.glob(pattern))
-        if ports:
-            port = ports[0]
-            break
-        remaining = int(deadline - time.time())
-        print(f'Waiting for Arduino USB… ({remaining}s remaining) '
-              f'— plug in USB cable if not already connected')
-        time.sleep(USB_POLL_INTERVAL)
-
-    if port is None:
-        print('ERROR: No Arduino found at /dev/ttyACM* or /dev/ttyUSB* '
-              f'after {USB_WAIT_TIMEOUT:.0f}s — giving up')
+    if not ports:
+        print('ERROR: No Arduino found at /dev/ttyACM* or /dev/ttyUSB*')
         rclpy.shutdown()
         return
 
+    port = ports[0]
     print(f'Using Arduino port: {port}')
 
     node = JoyToArduino(port)

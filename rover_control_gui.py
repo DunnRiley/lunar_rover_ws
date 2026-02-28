@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
 """
 Lunar Rover Mission Control GUI  —  rover_control_gui.py
-
-FIXES vs previous version:
-  - Forward/backward and turn axes corrected for mirrored motor mounts
-  - Arc-turn slider: blend between spin-in-place (0) and straight (100)
-  - Delay input field now correctly passes value to SSH launch command
-  - Stopping teleop also kills joy_node and teleop subprocess so no stale signals
-  - E-stop sends /emergency_stop=True then False (clear) on resume
+Controller teleop publishes /cmd_vel locally via rclpy (DDS transport).
+No keyboard teleop. Gamepad only via /joy.
 """
 
-import os, sys, math, subprocess, threading, time, signal
+import os, sys, math, queue, subprocess, threading, time
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QGroupBox, QTextEdit, QSlider,
     QSizePolicy, QFrame, QLineEdit
 )
-from PyQt5.QtGui  import QFont, QColor, QPainter, QBrush, QPen
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtGui  import QFont, QColor, QPainter, QBrush, QPen, QLinearGradient
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QPoint, QRect, QSize
 
 try:
     import rclpy
     from geometry_msgs.msg import Twist
-    from std_msgs.msg import Int8 as RosInt8, Bool as RosBool
+    from std_msgs.msg import Int8 as RosInt8
     ROS_AVAILABLE = True
 except ImportError:
     ROS_AVAILABLE = False
@@ -34,27 +29,25 @@ MINIPC_IP   = "192.168.0.102"
 MINIPC_WS   = "~/lunar_rover_ws"
 RVIZ_CONFIG = os.path.expanduser("~/lunar_rover_ws/laptop_stream.rviz")
 
-# ── Motor inversion (must match joy_to_arduino.py) ────────────────────────
-INVERT_FWD  = True   # Flip if rover drives backwards when pushing forward
-INVERT_TURN = False  # Flip if turning goes the wrong way
-
 # ═════════════════════════════════════════════════════════════════════════
 # TELEOP PUBLISHER — rclpy node in a QThread
+# Uses a "latest-value-wins" slot (NOT a queue) so stale commands are
+# always discarded. Publishes BEST_EFFORT/depth=1 so the miniPC
+# subscriber physically cannot accumulate a backlog.
 # ═════════════════════════════════════════════════════════════════════════
 class TeleopPublisher(QThread):
     status_changed = pyqtSignal(str)
     speed_changed  = pyqtSignal(float)
-    arc_changed    = pyqtSignal(float)
 
-    # Controller mapping
-    JOY_AXIS_FWD  = 1    # Left  stick Y  (+1 = forward on most pads)
+    # Controller mapping — check with: ros2 topic echo /joy
+    JOY_AXIS_FWD  = 1    # Left  stick Y  (+1 = forward)
     JOY_AXIS_TURN = 3    # Right stick X  (+1 = left)
     JOY_BTN_LB    = 4    # Left  bumper → actuator EXTEND
     JOY_BTN_RB    = 5    # Right bumper → actuator RETRACT
     JOY_BTN_X     = 2    # X button     → speed UP
     JOY_BTN_B     = 1    # B button     → speed DOWN
-    JOY_BTN_START = 7    # Start        → e-stop toggle
     JOY_DEADZONE  = 0.10
+    JOY_ANG_SCALE = 1.2
     SPEED_STEP    = 0.05
 
     def __init__(self):
@@ -62,17 +55,17 @@ class TeleopPublisher(QThread):
         self._lock    = threading.Lock()
         self._running = False
         self._speed   = 0.5
-        self._arc     = 1.0   # 1.0 = full differential (spin), 0.0 = straight only
         self._node    = None
         self._pub     = None
         self._act_pub = None
-        self._estop_pub = None
-        self._emergency = False
 
+        # Latest desired state — overwritten by every joy message.
+        # No queue; the publish loop always acts on the newest value only.
         self._want_lin = 0.0
         self._want_ang = 0.0
         self._want_act = 0
 
+        # Last values actually sent (for change detection)
         self._sent_lin = None
         self._sent_ang = None
         self._sent_act = None
@@ -83,37 +76,11 @@ class TeleopPublisher(QThread):
         with self._lock:
             self._speed = max(0.05, min(1.0, v))
 
-    def set_arc(self, v: float):
-        """v in [0.0, 1.0].  1.0 = maximum arc (full differential).
-           0.0 = near-straight (minimal turn component)."""
-        with self._lock:
-            self._arc = max(0.0, min(1.0, v))
-
     def emergency_stop(self):
         with self._lock:
             self._want_lin = 0.0
             self._want_ang = 0.0
             self._want_act = 0
-        self._emergency = True
-        if self._estop_pub:
-            try:
-                m = RosBool(); m.data = True
-                self._estop_pub.publish(m)
-            except Exception:
-                pass
-
-    def clear_estop(self):
-        self._emergency = False
-        if self._estop_pub:
-            try:
-                m = RosBool(); m.data = False
-                self._estop_pub.publish(m)
-            except Exception:
-                pass
-
-    def send_actuator(self, value: int):
-        with self._lock:
-            self._want_act = value
 
     # ── Joy helpers ───────────────────────────────────────────────────────
 
@@ -125,27 +92,13 @@ class TeleopPublisher(QThread):
         self._prev_btns[idx] = cur
         return cur == 1 and prev == 0
 
+    # ── /joy callback — only writes desired state, never publishes directly
+
     def _joy_cb(self, msg):
         try:
             ax  = lambda i: msg.axes[i]    if i < len(msg.axes)    else 0.0
             btn = lambda i: msg.buttons[i] if i < len(msg.buttons) else 0
 
-            # E-stop toggle
-            if self._rising(self.JOY_BTN_START, btn(self.JOY_BTN_START)):
-                if self._emergency:
-                    self.clear_estop()
-                    self.status_changed.emit('E-stop cleared via controller')
-                else:
-                    self.emergency_stop()
-                    self.status_changed.emit('⬛ E-STOP (controller)')
-
-            if self._emergency:
-                for b in (self.JOY_BTN_LB, self.JOY_BTN_RB,
-                          self.JOY_BTN_X,  self.JOY_BTN_B):
-                    self._prev_btns[b] = btn(b)
-                return
-
-            # Speed adjust
             if self._rising(self.JOY_BTN_X, btn(self.JOY_BTN_X)):
                 with self._lock:
                     self._speed = round(min(1.0, self._speed + self.SPEED_STEP), 2)
@@ -160,29 +113,18 @@ class TeleopPublisher(QThread):
                 self.speed_changed.emit(s)
                 self.status_changed.emit(f"Speed: {s:.2f}")
 
-            # Actuators
             lb  = btn(self.JOY_BTN_LB)
             rb  = btn(self.JOY_BTN_RB)
             act = 1 if lb else (-1 if rb else 0)
 
-            # Drive axes — apply inversion to match physical rover orientation
             fwd  = self._dz(ax(self.JOY_AXIS_FWD))
             turn = self._dz(ax(self.JOY_AXIS_TURN))
-
-            if INVERT_FWD:
-                fwd = -fwd
-            if INVERT_TURN:
-                turn = -turn
-
             with self._lock:
                 spd = self._speed
-                arc = self._arc
-
-            # Arc scaling: arc=1.0 → full angular_scale, arc=0.0 → 0.1 (near straight)
-            angular_scale = 0.1 + arc * 1.1   # range [0.1 … 1.2]
             lin = fwd  * spd
-            ang = turn * spd * angular_scale
+            ang = turn * spd * self.JOY_ANG_SCALE
 
+            # Atomically overwrite — no queuing
             with self._lock:
                 self._want_lin = lin
                 self._want_ang = ang
@@ -191,7 +133,7 @@ class TeleopPublisher(QThread):
         except Exception as e:
             self.status_changed.emit(f"Joy error: {e}")
 
-    # ── Flush ─────────────────────────────────────────────────────────────
+    # ── Flush — called every loop iteration after spin_once ──────────────
 
     def _flush(self):
         with self._lock:
@@ -229,14 +171,13 @@ class TeleopPublisher(QThread):
                 history=HistoryPolicy.KEEP_LAST,
                 depth=1
             )
-            self._pub      = self._node.create_publisher(Twist,   '/cmd_vel',        qos)
-            self._act_pub  = self._node.create_publisher(RosInt8, '/actuator_cmd',   qos)
-            self._estop_pub = self._node.create_publisher(RosBool, '/emergency_stop', 10)
+            self._pub     = self._node.create_publisher(Twist,   '/cmd_vel',      qos)
+            self._act_pub = self._node.create_publisher(RosInt8, '/actuator_cmd', qos)
 
             try:
                 from sensor_msgs.msg import Joy
                 self._node.create_subscription(Joy, '/joy', self._joy_cb, 10)
-                self.status_changed.emit("Teleop active  ·  awaiting controller")
+                self.status_changed.emit("Teleop active  ·  controller connected")
             except Exception:
                 self.status_changed.emit("Teleop active  ·  no sensor_msgs")
 
@@ -253,26 +194,14 @@ class TeleopPublisher(QThread):
         finally:
             self._running = False
             if self._node:
-                try:
-                    # Send stop before destroying
-                    stop = Twist()
-                    self._pub.publish(stop)
-                except Exception:
-                    pass
-                try:
-                    self._node.destroy_node()
-                except Exception:
-                    pass
+                try: self._node.destroy_node()
+                except: pass
 
     def stop(self):
-        # Send zero velocity before stopping
-        with self._lock:
-            self._want_lin = 0.0
-            self._want_ang = 0.0
-            self._want_act = 0
+        self.emergency_stop()
         self._running = False
         self.quit()
-        self.wait(3000)
+        self.wait(2000)
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -304,7 +233,7 @@ class StatusLED(QLabel):
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# PROCESS CARD
+# PROCESS CARD  (reusable start/stop + log widget)
 # ═════════════════════════════════════════════════════════════════════════
 class ProcessCard(QGroupBox):
     def __init__(self, title, cmd_fn, parent=None):
@@ -341,17 +270,14 @@ class ProcessCard(QGroupBox):
         if not cmd:
             self.btn.setChecked(False)
             return
-        self._proc = subprocess.Popen(cmd, shell=True, preexec_fn=os.setsid)
+        self._proc = subprocess.Popen(cmd, shell=True)
         self.led.set_color("green")
         self.btn.setText("STOP")
         self.log.setText(f"PID {self._proc.pid}")
 
     def _stop(self):
         if self._proc:
-            try:
-                os.killpg(os.getpgid(self._proc.pid), signal.SIGTERM)
-            except Exception:
-                self._proc.terminate()
+            self._proc.terminate()
             self._proc = None
         self.led.set_color("off")
         self.btn.setText("START")
@@ -367,13 +293,11 @@ class MissionControl(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Lunar Rover Mission Control")
-        self.setMinimumWidth(860)
-        self.setMinimumHeight(700)
+        self.setMinimumWidth(820)
+        self.setMinimumHeight(640)
 
-        self._teleop_active  = False
-        self._teleop_thread  = None
-        self._joy_proc       = None   # joy_node subprocess
-        self._teleop_proc    = None   # arduino_teleop_controller subprocess
+        self._teleop_active = False
+        self._teleop_thread: TeleopPublisher | None = None
 
         self._apply_stylesheet()
         self._build_ui()
@@ -411,11 +335,6 @@ class MissionControl(QWidget):
             }
             QSlider::sub-page:horizontal { background:#3a6040; border-radius:3px; }
             QLabel { color:#c0cce0; font-size:10px; }
-            QLineEdit {
-                background:#0e1018; color:#e8a030;
-                border:1px solid #2a3040; border-radius:3px;
-                padding:2px 4px;
-            }
         """)
 
     # ── UI ────────────────────────────────────────────────────────────────
@@ -451,17 +370,14 @@ class MissionControl(QWidget):
         # ── LEFT: miniPC ──────────────────────────────────────────────────
         minipc_box = QGroupBox("MINI PC  ·  remote launch")
         ml = QVBoxLayout(minipc_box)
-
-        # Delay row
         delay_row = QHBoxLayout()
         delay_row.addWidget(QLabel("Delay (s):"))
         self.delay_input = QLineEdit("0")
-        self.delay_input.setFixedWidth(55)
+        self.delay_input.setFixedWidth(50)
+        self.delay_input.setStyleSheet("background:#0e1018; color:#e8a030; border:1px solid #2a3040; border-radius:3px; padding:2px 4px;")
         delay_row.addWidget(self.delay_input)
         delay_row.addStretch()
         ml.addLayout(delay_row)
-
-        # Status row
         self.minipc_led    = StatusLED("off")
         self.minipc_status = QLabel("not started")
         self.minipc_status.setStyleSheet("color:#506070; font-size:9px;")
@@ -470,7 +386,6 @@ class MissionControl(QWidget):
         srow.addWidget(self.minipc_status)
         srow.addStretch()
         ml.addLayout(srow)
-
         self.minipc_btn = self._make_btn("LAUNCH MINI PC", "#1a1e10", "#4a6020", "#80aa30")
         self.minipc_btn.clicked.connect(self._launch_minipc)
         ml.addWidget(self.minipc_btn)
@@ -496,7 +411,7 @@ class MissionControl(QWidget):
         ll = QVBoxLayout(log_box)
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setFixedHeight(110)
+        self.log_view.setFixedHeight(120)
         ll.addWidget(self.log_view)
         left.addWidget(log_box)
 
@@ -506,11 +421,11 @@ class MissionControl(QWidget):
         left.addWidget(stop_all)
 
         # ── RIGHT: Teleop ─────────────────────────────────────────────────
-        tbox = QGroupBox("TELEOP  ·  gamepad")
+        tbox = QGroupBox("TELEOP  ·  /cmd_vel  via gamepad")
         tl = QVBoxLayout(tbox)
-        tl.setSpacing(6)
+        tl.setSpacing(8)
 
-        note = QLabel("🎮  Gamepad → /joy  (motors corrected for mirrored mount)")
+        note = QLabel("🎮  Gamepad → /joy → cmd_vel published locally, zero lag")
         note.setStyleSheet("color:#3a8a50; font-size:9px; padding:2px 0;")
         tl.addWidget(note)
 
@@ -529,12 +444,12 @@ class MissionControl(QWidget):
         ctrl_info = QLabel(
             "Left stick = drive  ·  Right stick = turn\n"
             "LB = extend  ·  RB = retract\n"
-            "X = speed+  ·  B = speed−  ·  Start = e-stop"
+            "X = speed+  ·  B = speed−"
         )
         ctrl_info.setStyleSheet("color:#3a5060; font-size:9px; padding:2px 0;")
         tl.addWidget(ctrl_info)
 
-        # ── Speed slider ──────────────────────────────────────────────────
+        # Speed slider
         sr = QHBoxLayout()
         sr.addWidget(QLabel("Speed:"))
         self.speed_slider = QSlider(Qt.Horizontal)
@@ -542,51 +457,10 @@ class MissionControl(QWidget):
         self.speed_slider.setValue(50)
         self.speed_slider.valueChanged.connect(self._speed_changed)
         sr.addWidget(self.speed_slider)
-        self.speed_label = QLabel("0.50")
-        self.speed_label.setStyleSheet("color:#e8a030; min-width:38px;")
+        self.speed_label = QLabel("0.50 m/s")
+        self.speed_label.setStyleSheet("color:#e8a030; min-width:55px;")
         sr.addWidget(self.speed_label)
         tl.addLayout(sr)
-
-        # ── Arc-turn slider ───────────────────────────────────────────────
-        arc_header = QLabel("ARC TURN  ·  ratio of inner to outer wheel speed")
-        arc_header.setStyleSheet("color:#6080a0; font-size:9px; font-weight:bold; letter-spacing:1px; padding-top:4px;")
-        tl.addWidget(arc_header)
-
-        arc_desc = QLabel(
-            "LEFT  = tight spin (0% inner wheel)\n"
-            "RIGHT = gentle arc (inner wheel matches outer)\n"
-            "Tip: lower arc = tank turn, higher arc = sweeping curve"
-        )
-        arc_desc.setStyleSheet("color:#3a5060; font-size:9px;")
-        tl.addWidget(arc_desc)
-
-        ar = QHBoxLayout()
-        ar.addWidget(QLabel("Tight"))
-        self.arc_slider = QSlider(Qt.Horizontal)
-        self.arc_slider.setRange(0, 100)
-        self.arc_slider.setValue(50)          # default: 50% arc
-        self.arc_slider.setStyleSheet("""
-            QSlider::groove:horizontal { background:#1a1e28; height:6px; border-radius:3px; }
-            QSlider::handle:horizontal {
-                background:#60a8e0; width:14px; height:14px;
-                margin:-4px 0; border-radius:7px;
-            }
-            QSlider::sub-page:horizontal { background:#204060; border-radius:3px; }
-        """)
-        self.arc_slider.valueChanged.connect(self._arc_changed)
-        ar.addWidget(self.arc_slider)
-        ar.addWidget(QLabel("Wide"))
-
-        # Inner-wheel % display
-        self.arc_label = QLabel("inner: 50%")
-        self.arc_label.setStyleSheet("color:#60a8e0; min-width:70px;")
-        ar.addWidget(self.arc_label)
-        tl.addLayout(ar)
-
-        # Outer / inner wheel % readout
-        self.arc_detail = QLabel("outer: 100%  inner: 50%")
-        self.arc_detail.setStyleSheet("color:#304050; font-size:9px;")
-        tl.addWidget(self.arc_detail)
 
         right.addWidget(tbox)
 
@@ -653,8 +527,9 @@ class MissionControl(QWidget):
 
     def _check_connection(self):
         def run():
-            r = subprocess.run(f"ping -c1 -W2 {MINIPC_IP}", shell=True,
-                               capture_output=True)
+            import subprocess as sp
+            r = sp.run(f"ping -c1 -W2 {MINIPC_IP}", shell=True,
+                       capture_output=True)
             ok = r.returncode == 0
             self.conn_led.set_color("green" if ok else "red")
             self.conn_label.setText(f"miniPC {MINIPC_IP}: {'online' if ok else 'offline'}")
@@ -662,33 +537,24 @@ class MissionControl(QWidget):
 
     # ── MiniPC launch ─────────────────────────────────────────────────────
     def _launch_minipc(self):
-        # --- FIX: read delay from input field and validate it ---
-        raw = self.delay_input.text().strip()
         try:
-            delay = float(raw) if raw else 0.0
-            if delay < 0:
-                delay = 0.0
+            delay = float(self.delay_input.text() or "0")
         except ValueError:
-            self._log(f"⚠  Invalid delay '{raw}' — using 0.0")
             delay = 0.0
-            self.delay_input.setText("0")
-
         delay_str = f"{delay:.1f}"
         mode = f"competition delay {delay_str}s" if delay > 0 else "live mode"
         self._log(f"SSH-starting miniPC… ({mode})")
         self.minipc_led.set_color("yellow")
         self.minipc_status.setText("Starting…")
-
         cmd = (
             f'ssh -o ConnectTimeout=6 {MINIPC_USER}@{MINIPC_IP} '
             f'"DELAY_SEC={delay_str} nohup bash {MINIPC_WS}/full_launch_minipc.sh '
             f'> /tmp/minipc_launch.log 2>&1 &"'
         )
-
         def run():
             r = subprocess.run(cmd, shell=True)
             if r.returncode == 0:
-                self._log(f"MiniPC launch sent ✓  (delay={delay_str}s)")
+                self._log("MiniPC launch sent ✓")
                 self.minipc_led.set_color("green")
                 self.minipc_status.setText(f"Launched  ·  {mode}")
             else:
@@ -699,30 +565,9 @@ class MissionControl(QWidget):
 
     # ── RViz ─────────────────────────────────────────────────────────────
     def _rviz_cmd(self):
-        # RViz MUST be launched inside a properly sourced ROS environment,
-        # otherwise ROS_DOMAIN_ID / ROS_LOCALHOST_ONLY are wrong and no
-        # topics from the miniPC are discovered.
-        config_arg = f"-d {RVIZ_CONFIG}" if os.path.exists(RVIZ_CONFIG) else ""
-        ros_distro = None
-        for d in ["/opt/ros/jazzy", "/opt/ros/humble", "/opt/ros/iron"]:
-            if os.path.exists(d + "/setup.bash"):
-                ros_distro = d
-                break
-        if ros_distro is None:
-            self._log("⚠  ROS2 not found at /opt/ros — RViz may not work")
-            return f"rviz2 {config_arg}".strip()
-
-        ws_setup = os.path.expanduser("~/lunar_rover_ws/install/setup.bash")
-        source_ws = f"[ -f {ws_setup} ] && source {ws_setup};" if os.path.exists(ws_setup) else ""
-        return (
-            f"bash -c '"
-            f"source {ros_distro}/setup.bash; "
-            f"{source_ws} "
-            f"export ROS_DOMAIN_ID=42; "
-            f"export ROS_LOCALHOST_ONLY=0; "
-            f"export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET; "
-            f"rviz2 {config_arg}'"
-        ).strip()
+        if os.path.exists(RVIZ_CONFIG):
+            return f"rviz2 -d {RVIZ_CONFIG}"
+        return "rviz2"
 
     # ── Autonomy ─────────────────────────────────────────────────────────
     def _start_nav(self):
@@ -751,21 +596,6 @@ class MissionControl(QWidget):
     def _start_teleop(self):
         if self._teleop_thread and self._teleop_thread.isRunning():
             return
-
-        # Start joy_node as a subprocess so we can kill it later
-        self._log("Starting joy_node (USB gamepad → /joy)…")
-        try:
-            self._joy_proc = subprocess.Popen(
-                "bash -c 'source /opt/ros/$(ls /opt/ros | head -1)/setup.bash && "
-                "ros2 run joy joy_node'",
-                shell=True,
-                preexec_fn=os.setsid  # put in own process group for clean kill
-            )
-            self._log(f"joy_node started (PID {self._joy_proc.pid})")
-        except Exception as e:
-            self._log(f"⚠ joy_node failed to start: {e}")
-            self._joy_proc = None
-
         self._teleop_thread = TeleopPublisher()
         self._teleop_thread.status_changed.connect(self._log)
         self._teleop_thread.speed_changed.connect(self._on_ctrl_speed)
@@ -773,37 +603,17 @@ class MissionControl(QWidget):
         self._teleop_active = True
         self.teleop_led.set_color("green")
         self.teleop_btn.setText("STOP TELEOP")
-
-        # Sync arc slider to thread
-        arc_val = self.arc_slider.value() / 100.0
-        self._teleop_thread.set_arc(arc_val)
-
-        self._log("Teleop started — plug in controller")
+        self._log("Teleop started — plug in controller and press START TELEOP")
 
     def _stop_teleop(self):
-        """Stop teleop thread AND kill joy_node so no stale signals remain."""
-        # 1. Stop the ROS publisher thread (sends zero vel first)
         if self._teleop_thread:
             self._teleop_thread.stop()
             self._teleop_thread = None
-
-        # 2. Kill joy_node process group
-        if self._joy_proc:
-            try:
-                os.killpg(os.getpgid(self._joy_proc.pid), signal.SIGTERM)
-                self._log("joy_node stopped")
-            except Exception as e:
-                self._log(f"joy_node kill error (may already be dead): {e}")
-            self._joy_proc = None
-
-        # 3. Belt-and-suspenders: pkill any stray joy_node
-        subprocess.run("pkill -f 'joy_node'", shell=True, capture_output=True)
-
         self._teleop_active = False
         self.teleop_led.set_color("off")
         self.teleop_btn.setText("START TELEOP")
         self.teleop_btn.setChecked(False)
-        self._log("Teleop stopped — all signals killed")
+        self._log("Teleop stopped")
 
     def _emergency_stop(self):
         if self._teleop_thread:
@@ -814,28 +624,15 @@ class MissionControl(QWidget):
         self.speed_slider.blockSignals(True)
         self.speed_slider.setValue(int(spd * 100))
         self.speed_slider.blockSignals(False)
-        self.speed_label.setText(f"{spd:.2f}")
+        self.speed_label.setText(f"{spd:.2f} m/s")
 
     def _speed_changed(self, val):
         spd = val / 100.0
-        self.speed_label.setText(f"{spd:.2f}")
+        self.speed_label.setText(f"{spd:.2f} m/s")
         if self._teleop_thread:
             self._teleop_thread.set_speed(spd)
 
-    # ── Arc-turn slider ───────────────────────────────────────────────────
-    def _arc_changed(self, val):
-        """val: 0–100.  0 = tight spin (inner wheel 0%), 100 = wide arc (inner ~90%)."""
-        # Inner wheel percentage: 0% at val=0, ~90% at val=100
-        inner_pct = int(val * 0.9)
-        self.arc_label.setText(f"inner: {inner_pct}%")
-        self.arc_detail.setText(f"outer: 100%   inner: {inner_pct}%   ratio: {val}%")
-
-        # Send to teleop thread as 0.0–1.0
-        arc_f = val / 100.0
-        if self._teleop_thread:
-            self._teleop_thread.set_arc(arc_f)
-
-    # ── Actuator GUI buttons ──────────────────────────────────────────────
+    # ── Actuator GUI buttons (supplement to controller bumpers) ──────────
     def _act_gui(self, value: int):
         if self._teleop_thread:
             self._teleop_thread.send_actuator(value)
@@ -850,11 +647,6 @@ class MissionControl(QWidget):
         self._log("Stopping all processes…")
         subprocess.run("pkill -f rviz2; pkill -f unified_navigator; pkill -f slam_minipc",
                        shell=True)
-
-    # ── Clean shutdown ────────────────────────────────────────────────────
-    def closeEvent(self, event):
-        self._stop_teleop()
-        event.accept()
 
 
 def main():
