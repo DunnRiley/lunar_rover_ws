@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """
 Lunar Rover Mission Control GUI  —  rover_control_gui.py
-Controller teleop publishes /cmd_vel locally via rclpy (DDS transport).
-No keyboard teleop. Gamepad only via /joy.
+UPDATED: Arc/Pivot turn modes, arc ratio slider, swapped stick layout.
 """
 
-import os, sys, math, queue, subprocess, threading, time
+import os, sys, math, subprocess, threading, time
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QGroupBox, QTextEdit, QSlider,
     QSizePolicy, QFrame, QLineEdit
 )
-from PyQt5.QtGui  import QFont, QColor, QPainter, QBrush, QPen, QLinearGradient
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QPoint, QRect, QSize
+from PyQt5.QtGui  import QFont, QColor, QPainter, QBrush, QPen
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 
 try:
     import rclpy
     from geometry_msgs.msg import Twist
-    from std_msgs.msg import Int8 as RosInt8
+    from std_msgs.msg import Int8 as RosInt8, Bool, String
     ROS_AVAILABLE = True
 except ImportError:
     ROS_AVAILABLE = False
@@ -29,23 +28,32 @@ MINIPC_IP   = "192.168.0.102"
 MINIPC_WS   = "~/lunar_rover_ws"
 RVIZ_CONFIG = os.path.expanduser("~/lunar_rover_ws/laptop_stream.rviz")
 
+PIVOT = 'PIVOT'
+ARC   = 'ARC'
+
 # ═════════════════════════════════════════════════════════════════════════
-# TELEOP PUBLISHER — rclpy node in a QThread
-# Uses a "latest-value-wins" slot (NOT a queue) so stale commands are
-# always discarded. Publishes BEST_EFFORT/depth=1 so the miniPC
-# subscriber physically cannot accumulate a backlog.
+# TELEOP PUBLISHER
 # ═════════════════════════════════════════════════════════════════════════
 class TeleopPublisher(QThread):
     status_changed = pyqtSignal(str)
     speed_changed  = pyqtSignal(float)
+    mode_changed   = pyqtSignal(str)   # 'PIVOT' or 'ARC'
+    ratio_changed  = pyqtSignal(int)   # 0-100
 
-    # Controller mapping — check with: ros2 topic echo /joy
-    JOY_AXIS_FWD  = 1    # Left  stick Y  (+1 = forward)
-    JOY_AXIS_TURN = 3    # Right stick X  (+1 = left)
-    JOY_BTN_LB    = 4    # Left  bumper → actuator EXTEND
-    JOY_BTN_RB    = 5    # Right bumper → actuator RETRACT
-    JOY_BTN_X     = 2    # X button     → speed UP
-    JOY_BTN_B     = 1    # B button     → speed DOWN
+    # ── Xbox USB axis/button mapping ──────────────────────────────────────
+    # Verify with:  ros2 topic echo /joy
+    # Wiggle Right stick up/down  → should be AXIS_DRIVE (typically 4)
+    # Wiggle Left  stick left/right → AXIS_TURN (typically 0)
+    AXIS_DRIVE   = 4    # Right stick Y  (+1 = forward)
+    AXIS_TURN    = 0    # Left  stick X  (+1 = right)
+    BTN_A        = 0    # PIVOT mode
+    BTN_B        = 1    # Speed DOWN
+    BTN_X        = 2    # Speed UP
+    BTN_Y        = 3    # ARC mode
+    BTN_LB       = 4    # Actuator extend
+    BTN_RB       = 5    # Actuator retract
+    BTN_START    = 7    # E-stop
+
     JOY_DEADZONE  = 0.10
     JOY_ANG_SCALE = 1.2
     SPEED_STEP    = 0.05
@@ -55,26 +63,49 @@ class TeleopPublisher(QThread):
         self._lock    = threading.Lock()
         self._running = False
         self._speed   = 0.5
+        self._mode    = ARC
+        self._ratio   = 50
         self._node    = None
         self._pub     = None
         self._act_pub = None
+        self._mode_pub  = None
+        self._ratio_pub = None
 
-        # Latest desired state — overwritten by every joy message.
-        # No queue; the publish loop always acts on the newest value only.
         self._want_lin = 0.0
         self._want_ang = 0.0
         self._want_act = 0
 
-        # Last values actually sent (for change detection)
         self._sent_lin = None
         self._sent_ang = None
         self._sent_act = None
 
         self._prev_btns = {}
 
+    # ── Public setters ────────────────────────────────────────────────────
+
     def set_speed(self, v: float):
         with self._lock:
             self._speed = max(0.05, min(1.0, v))
+
+    def set_arc_ratio(self, v: int):
+        with self._lock:
+            self._ratio = max(0, min(100, v))
+        if self._ratio_pub:
+            try:
+                m = RosInt8(); m.data = self._ratio
+                self._ratio_pub.publish(m)
+            except Exception:
+                pass
+
+    def set_mode(self, mode: str):
+        with self._lock:
+            self._mode = mode
+        if self._mode_pub:
+            try:
+                m = String(); m.data = mode
+                self._mode_pub.publish(m)
+            except Exception:
+                pass
 
     def emergency_stop(self):
         with self._lock:
@@ -82,7 +113,7 @@ class TeleopPublisher(QThread):
             self._want_ang = 0.0
             self._want_act = 0
 
-    # ── Joy helpers ───────────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────
 
     def _dz(self, v):
         return v if abs(v) >= self.JOY_DEADZONE else 0.0
@@ -92,48 +123,67 @@ class TeleopPublisher(QThread):
         self._prev_btns[idx] = cur
         return cur == 1 and prev == 0
 
-    # ── /joy callback — only writes desired state, never publishes directly
+    # ── /joy callback ─────────────────────────────────────────────────────
 
     def _joy_cb(self, msg):
         try:
             ax  = lambda i: msg.axes[i]    if i < len(msg.axes)    else 0.0
             btn = lambda i: msg.buttons[i] if i < len(msg.buttons) else 0
 
-            if self._rising(self.JOY_BTN_X, btn(self.JOY_BTN_X)):
+            # Turn mode
+            if self._rising(self.BTN_A, btn(self.BTN_A)):
+                with self._lock:
+                    self._mode = PIVOT
+                self.mode_changed.emit(PIVOT)
+                self.status_changed.emit('Turn mode: PIVOT')
+                if self._mode_pub:
+                    m = String(); m.data = PIVOT; self._mode_pub.publish(m)
+
+            if self._rising(self.BTN_Y, btn(self.BTN_Y)):
+                with self._lock:
+                    self._mode = ARC
+                self.mode_changed.emit(ARC)
+                self.status_changed.emit(f'Turn mode: ARC  ratio={self._ratio}')
+                if self._mode_pub:
+                    m = String(); m.data = ARC; self._mode_pub.publish(m)
+
+            # Speed
+            if self._rising(self.BTN_X, btn(self.BTN_X)):
                 with self._lock:
                     self._speed = round(min(1.0, self._speed + self.SPEED_STEP), 2)
                     s = self._speed
                 self.speed_changed.emit(s)
-                self.status_changed.emit(f"Speed: {s:.2f}")
+                self.status_changed.emit(f'Speed: {s:.2f}')
 
-            if self._rising(self.JOY_BTN_B, btn(self.JOY_BTN_B)):
+            if self._rising(self.BTN_B, btn(self.BTN_B)):
                 with self._lock:
                     self._speed = round(max(0.05, self._speed - self.SPEED_STEP), 2)
                     s = self._speed
                 self.speed_changed.emit(s)
-                self.status_changed.emit(f"Speed: {s:.2f}")
+                self.status_changed.emit(f'Speed: {s:.2f}')
 
-            lb  = btn(self.JOY_BTN_LB)
-            rb  = btn(self.JOY_BTN_RB)
+            # Actuators
+            lb  = btn(self.BTN_LB)
+            rb  = btn(self.BTN_RB)
             act = 1 if lb else (-1 if rb else 0)
 
-            fwd  = self._dz(ax(self.JOY_AXIS_FWD))
-            turn = self._dz(ax(self.JOY_AXIS_TURN))
+            # Drive (publish Twist for ROS consumers / nav stack)
+            fwd  = self._dz(ax(self.AXIS_DRIVE))
+            turn = self._dz(ax(self.AXIS_TURN))
             with self._lock:
                 spd = self._speed
-            lin = fwd  * spd
-            ang = turn * spd * self.JOY_ANG_SCALE
+            lin =  fwd  * spd
+            ang = -turn * spd * self.JOY_ANG_SCALE
 
-            # Atomically overwrite — no queuing
             with self._lock:
                 self._want_lin = lin
                 self._want_ang = ang
                 self._want_act = act
 
         except Exception as e:
-            self.status_changed.emit(f"Joy error: {e}")
+            self.status_changed.emit(f'Joy error: {e}')
 
-    # ── Flush — called every loop iteration after spin_once ──────────────
+    # ── Flush ─────────────────────────────────────────────────────────────
 
     def _flush(self):
         with self._lock:
@@ -158,7 +208,7 @@ class TeleopPublisher(QThread):
 
     def run(self):
         if not ROS_AVAILABLE:
-            self.status_changed.emit("ROS2 not available")
+            self.status_changed.emit('ROS2 not available')
             return
         try:
             if not rclpy.ok():
@@ -171,15 +221,17 @@ class TeleopPublisher(QThread):
                 history=HistoryPolicy.KEEP_LAST,
                 depth=1
             )
-            self._pub     = self._node.create_publisher(Twist,   '/cmd_vel',      qos)
-            self._act_pub = self._node.create_publisher(RosInt8, '/actuator_cmd', qos)
+            self._pub       = self._node.create_publisher(Twist,   '/cmd_vel',      qos)
+            self._act_pub   = self._node.create_publisher(RosInt8, '/actuator_cmd', qos)
+            self._mode_pub  = self._node.create_publisher(String,  '/turn_mode',    10)
+            self._ratio_pub = self._node.create_publisher(RosInt8, '/arc_ratio',    10)
 
             try:
                 from sensor_msgs.msg import Joy
                 self._node.create_subscription(Joy, '/joy', self._joy_cb, 10)
-                self.status_changed.emit("Teleop active  ·  controller connected")
+                self.status_changed.emit('Teleop active  ·  controller connected')
             except Exception:
-                self.status_changed.emit("Teleop active  ·  no sensor_msgs")
+                self.status_changed.emit('Teleop active  ·  no sensor_msgs')
 
             self._running = True
             executor = rclpy.executors.SingleThreadedExecutor()
@@ -190,7 +242,7 @@ class TeleopPublisher(QThread):
                 self._flush()
 
         except Exception as e:
-            self.status_changed.emit(f"Teleop error: {e}")
+            self.status_changed.emit(f'Teleop error: {e}')
         finally:
             self._running = False
             if self._node:
@@ -233,7 +285,7 @@ class StatusLED(QLabel):
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# PROCESS CARD  (reusable start/stop + log widget)
+# PROCESS CARD
 # ═════════════════════════════════════════════════════════════════════════
 class ProcessCard(QGroupBox):
     def __init__(self, title, cmd_fn, parent=None):
@@ -260,10 +312,8 @@ class ProcessCard(QGroupBox):
         lay.addWidget(self.log)
 
     def _toggle(self, checked):
-        if checked:
-            self._start()
-        else:
-            self._stop()
+        if checked: self._start()
+        else:       self._stop()
 
     def _start(self):
         cmd = self._cmd_fn()
@@ -293,8 +343,8 @@ class MissionControl(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Lunar Rover Mission Control")
-        self.setMinimumWidth(820)
-        self.setMinimumHeight(640)
+        self.setMinimumWidth(860)
+        self.setMinimumHeight(700)
 
         self._teleop_active = False
         self._teleop_thread: TeleopPublisher | None = None
@@ -345,13 +395,14 @@ class MissionControl(QWidget):
 
         # Header
         hdr = QLabel("⬡  LUNAR ROVER  ·  MISSION CONTROL")
-        hdr.setStyleSheet("color:#e8a030; font-size:14px; font-weight:bold; letter-spacing:3px; padding:4px 0;")
+        hdr.setStyleSheet("color:#e8a030; font-size:14px; font-weight:bold; "
+                          "letter-spacing:3px; padding:4px 0;")
         root.addWidget(hdr)
 
         # Connection bar
         cbar = QHBoxLayout()
-        self.conn_led    = StatusLED("off")
-        self.conn_label  = QLabel("miniPC: checking…")
+        self.conn_led   = StatusLED("off")
+        self.conn_label = QLabel("miniPC: checking…")
         self.conn_label.setStyleSheet("color:#506070; font-size:9px;")
         cbar.addWidget(self.conn_led)
         cbar.addWidget(self.conn_label)
@@ -374,7 +425,9 @@ class MissionControl(QWidget):
         delay_row.addWidget(QLabel("Delay (s):"))
         self.delay_input = QLineEdit("0")
         self.delay_input.setFixedWidth(50)
-        self.delay_input.setStyleSheet("background:#0e1018; color:#e8a030; border:1px solid #2a3040; border-radius:3px; padding:2px 4px;")
+        self.delay_input.setStyleSheet(
+            "background:#0e1018; color:#e8a030; border:1px solid #2a3040;"
+            "border-radius:3px; padding:2px 4px;")
         delay_row.addWidget(self.delay_input)
         delay_row.addStretch()
         ml.addLayout(delay_row)
@@ -399,7 +452,7 @@ class MissionControl(QWidget):
         auto_box = QGroupBox("AUTONOMY")
         al = QVBoxLayout(auto_box)
         nav_btn  = self._make_btn("Point-Click Navigation", "#101820", "#1a4060", "#2a80c0")
-        slam_btn = self._make_btn("SLAM / Mapping",        "#101820", "#1a4060", "#2a80c0")
+        slam_btn = self._make_btn("SLAM / Mapping",         "#101820", "#1a4060", "#2a80c0")
         nav_btn.clicked.connect(self._start_nav)
         slam_btn.clicked.connect(self._start_slam)
         al.addWidget(nav_btn)
@@ -415,7 +468,6 @@ class MissionControl(QWidget):
         ll.addWidget(self.log_view)
         left.addWidget(log_box)
 
-        # Stop all button
         stop_all = self._make_btn("⬛  STOP ALL PROCESSES", "#1a0808", "#601010", "#aa2020")
         stop_all.clicked.connect(self._stop_all)
         left.addWidget(stop_all)
@@ -423,12 +475,13 @@ class MissionControl(QWidget):
         # ── RIGHT: Teleop ─────────────────────────────────────────────────
         tbox = QGroupBox("TELEOP  ·  /cmd_vel  via gamepad")
         tl = QVBoxLayout(tbox)
-        tl.setSpacing(8)
+        tl.setSpacing(6)
 
-        note = QLabel("🎮  Gamepad → /joy → cmd_vel published locally, zero lag")
+        note = QLabel("🎮  Right stick Y=drive  ·  Left stick X=turn")
         note.setStyleSheet("color:#3a8a50; font-size:9px; padding:2px 0;")
         tl.addWidget(note)
 
+        # Start / E-stop row
         tr = QHBoxLayout()
         self.teleop_led = StatusLED("off")
         tr.addWidget(self.teleop_led)
@@ -442,9 +495,8 @@ class MissionControl(QWidget):
         tl.addLayout(tr)
 
         ctrl_info = QLabel(
-            "Left stick = drive  ·  Right stick = turn\n"
             "LB = extend  ·  RB = retract\n"
-            "X = speed+  ·  B = speed−"
+            "X = speed+  ·  B = speed−  ·  A = pivot  ·  Y = arc"
         )
         ctrl_info.setStyleSheet("color:#3a5060; font-size:9px; padding:2px 0;")
         tl.addWidget(ctrl_info)
@@ -461,6 +513,58 @@ class MissionControl(QWidget):
         self.speed_label.setStyleSheet("color:#e8a030; min-width:55px;")
         sr.addWidget(self.speed_label)
         tl.addLayout(sr)
+
+        # Turn mode buttons
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Turn:"))
+        self.pivot_btn = self._make_btn("A  PIVOT", "#1a1520", "#503060", "#9050c0")
+        self.arc_btn   = self._make_btn("Y  ARC",   "#101828", "#1a4060", "#2a80c0")
+        self.pivot_btn.setCheckable(True)
+        self.arc_btn.setCheckable(True)
+        self.arc_btn.setChecked(True)   # default arc
+        self.pivot_btn.clicked.connect(lambda: self._set_turn_mode(PIVOT))
+        self.arc_btn.clicked.connect(lambda:   self._set_turn_mode(ARC))
+        mode_row.addWidget(self.pivot_btn)
+        mode_row.addWidget(self.arc_btn)
+        self.mode_label = QLabel("ARC")
+        self.mode_label.setStyleSheet(
+            "color:#2a80c0; font-size:10px; font-weight:bold; min-width:50px;")
+        mode_row.addWidget(self.mode_label)
+        tl.addLayout(mode_row)
+
+        # Arc ratio slider
+        arc_row = QHBoxLayout()
+        arc_lbl = QLabel("Arc tightness:")
+        arc_lbl.setToolTip("0 = tight (near-pivot)   100 = wide arc")
+        arc_row.addWidget(arc_lbl)
+        self.arc_slider = QSlider(Qt.Horizontal)
+        self.arc_slider.setRange(0, 100)
+        self.arc_slider.setValue(50)
+        self.arc_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                background:#1a1e28; height:6px; border-radius:3px;
+            }
+            QSlider::handle:horizontal {
+                background:#2a80c0; width:14px; height:14px;
+                margin:-4px 0; border-radius:7px;
+            }
+            QSlider::sub-page:horizontal { background:#1a3050; border-radius:3px; }
+        """)
+        self.arc_slider.valueChanged.connect(self._arc_ratio_changed)
+        arc_row.addWidget(self.arc_slider)
+        self.arc_label = QLabel("50")
+        self.arc_label.setStyleSheet("color:#2a80c0; min-width:30px; font-size:9px;")
+        arc_row.addWidget(self.arc_label)
+        tl.addLayout(arc_row)
+
+        arc_hint = QHBoxLayout()
+        arc_hint.addWidget(QLabel("← tight (0)"))
+        arc_hint.addStretch()
+        arc_hint.addWidget(QLabel("wide (100) →"))
+        for w in [arc_hint.itemAt(i).widget() for i in range(arc_hint.count())
+                  if arc_hint.itemAt(i).widget()]:
+            w.setStyleSheet("color:#304050; font-size:8px;")
+        tl.addLayout(arc_hint)
 
         right.addWidget(tbox)
 
@@ -493,6 +597,8 @@ class MissionControl(QWidget):
         root.addStretch()
 
         self._log("Mission Control ready.")
+        self._log("Right stick Y = drive  |  Left stick X = turn")
+        self._log("A = pivot mode  |  Y = arc mode  |  Arc slider = tightness")
         if not ROS_AVAILABLE:
             self._log("⚠  rclpy not found — teleop disabled")
 
@@ -504,7 +610,8 @@ class MissionControl(QWidget):
             QPushButton {{
                 background:{bg}; color:#a0b8c8;
                 border:1px solid {border}; border-radius:5px;
-                padding:6px 12px; font-size:10px; font-weight:bold; letter-spacing:1px;
+                padding:6px 12px; font-size:10px; font-weight:bold;
+                letter-spacing:1px;
             }}
             QPushButton:hover   {{ background:{border}; color:white; }}
             QPushButton:pressed {{ background:{bg}; }}
@@ -516,7 +623,8 @@ class MissionControl(QWidget):
     def _log(self, msg):
         from datetime import datetime
         ts = datetime.now().strftime("%H:%M:%S")
-        self.log_view.append(f"<span style='color:#304050'>[{ts}]</span> {msg}")
+        self.log_view.append(
+            f"<span style='color:#304050'>[{ts}]</span> {msg}")
 
     # ── Connection checker ────────────────────────────────────────────────
     def _start_connection_checker(self):
@@ -532,7 +640,8 @@ class MissionControl(QWidget):
                        capture_output=True)
             ok = r.returncode == 0
             self.conn_led.set_color("green" if ok else "red")
-            self.conn_label.setText(f"miniPC {MINIPC_IP}: {'online' if ok else 'offline'}")
+            self.conn_label.setText(
+                f"miniPC {MINIPC_IP}: {'online' if ok else 'offline'}")
         threading.Thread(target=run, daemon=True).start()
 
     # ── MiniPC launch ─────────────────────────────────────────────────────
@@ -588,10 +697,8 @@ class MissionControl(QWidget):
 
     # ── Teleop ────────────────────────────────────────────────────────────
     def _toggle_teleop(self, checked):
-        if checked:
-            self._start_teleop()
-        else:
-            self._stop_teleop()
+        if checked: self._start_teleop()
+        else:       self._stop_teleop()
 
     def _start_teleop(self):
         if self._teleop_thread and self._teleop_thread.isRunning():
@@ -599,11 +706,17 @@ class MissionControl(QWidget):
         self._teleop_thread = TeleopPublisher()
         self._teleop_thread.status_changed.connect(self._log)
         self._teleop_thread.speed_changed.connect(self._on_ctrl_speed)
+        self._teleop_thread.mode_changed.connect(self._on_mode_changed)
+        # Sync slider values into the new thread
+        self._teleop_thread.set_arc_ratio(self.arc_slider.value())
+        self._teleop_thread.set_mode(
+            PIVOT if self.pivot_btn.isChecked() else ARC)
         self._teleop_thread.start()
         self._teleop_active = True
         self.teleop_led.set_color("green")
         self.teleop_btn.setText("STOP TELEOP")
-        self._log("Teleop started — plug in controller and press START TELEOP")
+        self._log("Teleop started — Right stick=drive  Left stick=turn")
+        self._log("A=pivot  Y=arc  X=spd+  B=spd-  LB=extend  RB=retract")
 
     def _stop_teleop(self):
         if self._teleop_thread:
@@ -632,21 +745,54 @@ class MissionControl(QWidget):
         if self._teleop_thread:
             self._teleop_thread.set_speed(spd)
 
-    # ── Actuator GUI buttons (supplement to controller bumpers) ──────────
-    def _act_gui(self, value: int):
+    # ── Turn mode ─────────────────────────────────────────────────────────
+    def _set_turn_mode(self, mode: str):
+        self.pivot_btn.setChecked(mode == PIVOT)
+        self.arc_btn.setChecked(mode == ARC)
+        color = "#9050c0" if mode == PIVOT else "#2a80c0"
+        self.mode_label.setText(mode)
+        self.mode_label.setStyleSheet(
+            f"color:{color}; font-size:10px; font-weight:bold; min-width:50px;")
+        # Arc slider only meaningful in ARC mode — dim it in PIVOT
+        self.arc_slider.setEnabled(mode == ARC)
+        self.arc_label.setEnabled(mode == ARC)
         if self._teleop_thread:
-            self._teleop_thread.send_actuator(value)
+            self._teleop_thread.set_mode(mode)
+        self._log(f"Turn mode → {mode}")
+
+    def _on_mode_changed(self, mode: str):
+        """Controller A/Y button changed mode — update GUI to match."""
+        self._set_turn_mode(mode)
+
+    # ── Arc ratio ─────────────────────────────────────────────────────────
+    def _arc_ratio_changed(self, val: int):
+        if val <= 10:      desc = "near-pivot"
+        elif val >= 90:    desc = "near-straight"
+        elif val < 40:     desc = "tight arc"
+        elif val > 60:     desc = "wide arc"
+        else:              desc = "mid arc"
+        self.arc_label.setText(f"{val}")
+        self.arc_label.setToolTip(desc)
+        if self._teleop_thread:
+            self._teleop_thread.set_arc_ratio(val)
+
+    # ── Actuator GUI ──────────────────────────────────────────────────────
+    def _act_gui(self, value: int):
+        if self._teleop_thread and hasattr(self._teleop_thread, '_want_act'):
+            self._teleop_thread._want_act = value
         labels = {1: "▲ Extending…", -1: "▼ Retracting…", 0: "Actuator: idle"}
         colors = {1: "#40c070",       -1: "#c04040",        0: "#607080"}
         self.act_status.setText(labels.get(value, ""))
-        self.act_status.setStyleSheet(f"color:{colors.get(value,'#607080')}; font-size:9px;")
+        self.act_status.setStyleSheet(
+            f"color:{colors.get(value,'#607080')}; font-size:9px;")
 
     # ── Stop all ─────────────────────────────────────────────────────────
     def _stop_all(self):
         self._stop_teleop()
         self._log("Stopping all processes…")
-        subprocess.run("pkill -f rviz2; pkill -f unified_navigator; pkill -f slam_minipc",
-                       shell=True)
+        subprocess.run(
+            "pkill -f rviz2; pkill -f unified_navigator; pkill -f slam_minipc",
+            shell=True)
 
 
 def main():

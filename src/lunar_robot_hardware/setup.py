@@ -17,7 +17,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='rileydunn',
+    maintainer='cheese',
     maintainer_email='you@example.com',
     description='Lunar robot Arduino hardware interface',
     license='MIT',

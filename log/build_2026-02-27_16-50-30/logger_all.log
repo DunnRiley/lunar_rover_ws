@@ -6,7 +6,7 @@
 [0.077s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
 [0.077s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
 [0.077s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
-[0.077s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/rileydunn/lunar_rover_ws'
+[0.077s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/cheese/lunar_rover_ws'
 [0.077s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
 [0.077s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
 [0.077s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
@@ -123,7 +123,7 @@
 [0.097s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
 [0.107s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
 [0.107s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
-[0.107s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 3 installed packages in /home/rileydunn/lunar_rover_ws/install
+[0.107s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 3 installed packages in /home/cheese/lunar_rover_ws/install
 [0.108s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 291 installed packages in /opt/ros/jazzy
 [0.109s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_autonomous' build argument 'cmake_args' from command line to 'None'
@@ -135,7 +135,7 @@
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_autonomous' build argument 'ament_cmake_args' from command line to 'None'
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_autonomous' build argument 'catkin_cmake_args' from command line to 'None'
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_autonomous' build argument 'catkin_skip_building_tests' from command line to 'False'
-[0.125s] DEBUG:colcon.colcon_core.verb:Building package 'lunar_robot_autonomous' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous', 'merge_install': False, 'path': '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous', 'symlink_install': False, 'test_result_base': None}
+[0.125s] DEBUG:colcon.colcon_core.verb:Building package 'lunar_robot_autonomous' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/cheese/lunar_rover_ws/build/lunar_robot_autonomous', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous', 'merge_install': False, 'path': '/home/cheese/lunar_rover_ws/src/lunar_robot_autonomous', 'symlink_install': False, 'test_result_base': None}
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_description' build argument 'cmake_args' from command line to 'None'
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_description' build argument 'cmake_target' from command line to 'None'
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_description' build argument 'cmake_target_skip_unavailable' from command line to 'False'
@@ -145,7 +145,7 @@
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_description' build argument 'ament_cmake_args' from command line to 'None'
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_description' build argument 'catkin_cmake_args' from command line to 'None'
 [0.125s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_description' build argument 'catkin_skip_building_tests' from command line to 'False'
-[0.125s] DEBUG:colcon.colcon_core.verb:Building package 'lunar_robot_description' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description', 'merge_install': False, 'path': '/home/rileydunn/lunar_rover_ws/src/lunar_robot_description', 'symlink_install': False, 'test_result_base': None}
+[0.125s] DEBUG:colcon.colcon_core.verb:Building package 'lunar_robot_description' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/cheese/lunar_rover_ws/build/lunar_robot_description', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/cheese/lunar_rover_ws/install/lunar_robot_description', 'merge_install': False, 'path': '/home/cheese/lunar_rover_ws/src/lunar_robot_description', 'symlink_install': False, 'test_result_base': None}
 [0.126s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_hardware' build argument 'cmake_args' from command line to 'None'
 [0.126s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_hardware' build argument 'cmake_target' from command line to 'None'
 [0.126s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_hardware' build argument 'cmake_target_skip_unavailable' from command line to 'False'
@@ -155,112 +155,112 @@
 [0.126s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_hardware' build argument 'ament_cmake_args' from command line to 'None'
 [0.126s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_hardware' build argument 'catkin_cmake_args' from command line to 'None'
 [0.126s] Level 5:colcon.colcon_core.verb:set package 'lunar_robot_hardware' build argument 'catkin_skip_building_tests' from command line to 'False'
-[0.126s] DEBUG:colcon.colcon_core.verb:Building package 'lunar_robot_hardware' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware', 'merge_install': False, 'path': '/home/rileydunn/lunar_rover_ws/src/lunar_robot_hardware', 'symlink_install': False, 'test_result_base': None}
+[0.126s] DEBUG:colcon.colcon_core.verb:Building package 'lunar_robot_hardware' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/cheese/lunar_rover_ws/build/lunar_robot_hardware', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware', 'merge_install': False, 'path': '/home/cheese/lunar_rover_ws/src/lunar_robot_hardware', 'symlink_install': False, 'test_result_base': None}
 [0.126s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
 [0.126s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
-[0.127s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous' with build type 'ament_python'
+[0.127s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/cheese/lunar_rover_ws/src/lunar_robot_autonomous' with build type 'ament_python'
 [0.127s] Level 1:colcon.colcon_core.shell:create_environment_hook('lunar_robot_autonomous', 'ament_prefix_path')
 [0.128s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
-[0.128s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/ament_prefix_path.ps1'
-[0.128s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/ament_prefix_path.dsv'
-[0.128s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/ament_prefix_path.sh'
+[0.128s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/ament_prefix_path.ps1'
+[0.128s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/ament_prefix_path.dsv'
+[0.128s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/ament_prefix_path.sh'
 [0.129s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
 [0.129s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
-[0.131s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_description' with build type 'ament_cmake'
-[0.131s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_description'
+[0.131s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/cheese/lunar_rover_ws/src/lunar_robot_description' with build type 'ament_cmake'
+[0.131s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/cheese/lunar_rover_ws/src/lunar_robot_description'
 [0.131s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
 [0.131s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
-[0.135s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_hardware' with build type 'ament_python'
+[0.135s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/cheese/lunar_rover_ws/src/lunar_robot_hardware' with build type 'ament_python'
 [0.135s] Level 1:colcon.colcon_core.shell:create_environment_hook('lunar_robot_hardware', 'ament_prefix_path')
-[0.135s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/ament_prefix_path.ps1'
-[0.136s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/ament_prefix_path.dsv'
-[0.136s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/ament_prefix_path.sh'
+[0.135s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/ament_prefix_path.ps1'
+[0.136s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/ament_prefix_path.dsv'
+[0.136s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/ament_prefix_path.sh'
 [0.136s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
 [0.136s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
-[0.256s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous'
+[0.256s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/cheese/lunar_rover_ws/src/lunar_robot_autonomous'
 [0.256s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
 [0.256s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
-[0.262s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/rileydunn/lunar_rover_ws/build/lunar_robot_description -- -j16 -l16
-[0.392s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_hardware'
+[0.262s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/cheese/lunar_rover_ws/build/lunar_robot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/cheese/lunar_rover_ws/install/lunar_robot_hardware:/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/cheese/lunar_rover_ws/build/lunar_robot_description -- -j16 -l16
+[0.392s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/cheese/lunar_rover_ws/src/lunar_robot_hardware'
 [0.392s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
 [0.392s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
-[0.396s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/rileydunn/lunar_rover_ws/build/lunar_robot_description -- -j16 -l16
-[0.408s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/rileydunn/lunar_rover_ws/build/lunar_robot_description
+[0.396s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/cheese/lunar_rover_ws/build/lunar_robot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/cheese/lunar_rover_ws/install/lunar_robot_hardware:/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/cheese/lunar_rover_ws/build/lunar_robot_description -- -j16 -l16
+[0.408s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/cheese/lunar_rover_ws/build/lunar_robot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/cheese/lunar_rover_ws/install/lunar_robot_hardware:/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/cheese/lunar_rover_ws/build/lunar_robot_description
 [0.419s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(lunar_robot_description)
-[0.421s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/rileydunn/lunar_rover_ws/build/lunar_robot_description
-[0.423s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description' for CMake module files
-[0.423s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description' for CMake config files
+[0.421s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/cheese/lunar_rover_ws/build/lunar_robot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/cheese/lunar_rover_ws/install/lunar_robot_hardware:/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/cheese/lunar_rover_ws/build/lunar_robot_description
+[0.423s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description' for CMake module files
+[0.423s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description' for CMake config files
 [0.424s] Level 1:colcon.colcon_core.shell:create_environment_hook('lunar_robot_description', 'cmake_prefix_path')
-[0.424s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.ps1'
-[0.424s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.dsv'
-[0.425s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.sh'
-[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/bin'
-[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/lib/pkgconfig/lunar_robot_description.pc'
-[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/lib/python3.12/site-packages'
-[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/bin'
-[0.426s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.ps1'
-[0.427s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.dsv'
-[0.428s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.sh'
-[0.428s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.bash'
-[0.429s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.zsh'
-[0.430s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/colcon-core/packages/lunar_robot_description)
+[0.424s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.ps1'
+[0.424s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.dsv'
+[0.425s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.sh'
+[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/bin'
+[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/lib/pkgconfig/lunar_robot_description.pc'
+[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/lib/python3.12/site-packages'
+[0.426s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/bin'
+[0.426s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.ps1'
+[0.427s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.dsv'
+[0.428s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.sh'
+[0.428s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.bash'
+[0.429s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.zsh'
+[0.430s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/colcon-core/packages/lunar_robot_description)
 [0.431s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(lunar_robot_description)
-[0.431s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description' for CMake module files
-[0.431s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description' for CMake config files
+[0.431s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description' for CMake module files
+[0.431s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description' for CMake config files
 [0.432s] Level 1:colcon.colcon_core.shell:create_environment_hook('lunar_robot_description', 'cmake_prefix_path')
-[0.432s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.ps1'
-[0.433s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.dsv'
-[0.433s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.sh'
-[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/bin'
-[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/lib/pkgconfig/lunar_robot_description.pc'
-[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/lib/python3.12/site-packages'
-[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/bin'
-[0.434s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.ps1'
-[0.435s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.dsv'
-[0.435s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.sh'
-[0.435s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.bash'
-[0.436s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.zsh'
-[0.436s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/colcon-core/packages/lunar_robot_description)
-[0.858s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
-[0.889s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_hardware': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_hardware build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware/install.log --single-version-externally-managed install_data
-[1.405s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous' for CMake module files
-[1.405s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
-[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous' for CMake config files
-[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib'
-[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/bin'
-[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/pkgconfig/lunar_robot_autonomous.pc'
-[1.407s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages'
+[0.432s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.ps1'
+[0.433s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.dsv'
+[0.433s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/hook/cmake_prefix_path.sh'
+[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/bin'
+[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/lib/pkgconfig/lunar_robot_description.pc'
+[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/lib/python3.12/site-packages'
+[0.434s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_description/bin'
+[0.434s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.ps1'
+[0.435s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.dsv'
+[0.435s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.sh'
+[0.435s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.bash'
+[0.436s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.zsh'
+[0.436s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/cheese/lunar_rover_ws/install/lunar_robot_description/share/colcon-core/packages/lunar_robot_description)
+[0.858s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/cheese/lunar_rover_ws/src/lunar_robot_autonomous': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
+[0.889s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/cheese/lunar_rover_ws/src/lunar_robot_hardware': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/cheese/lunar_rover_ws/build/lunar_robot_hardware/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_hardware build --build-base /home/cheese/lunar_rover_ws/build/lunar_robot_hardware/build install --record /home/cheese/lunar_rover_ws/build/lunar_robot_hardware/install.log --single-version-externally-managed install_data
+[1.405s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous' for CMake module files
+[1.405s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/cheese/lunar_rover_ws/src/lunar_robot_autonomous' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
+[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous' for CMake config files
+[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib'
+[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/bin'
+[1.406s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/pkgconfig/lunar_robot_autonomous.pc'
+[1.407s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages'
 [1.407s] Level 1:colcon.colcon_core.shell:create_environment_hook('lunar_robot_autonomous', 'pythonpath')
-[1.407s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/pythonpath.ps1'
-[1.409s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/pythonpath.dsv'
-[1.410s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/pythonpath.sh'
-[1.411s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/bin'
+[1.407s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/pythonpath.ps1'
+[1.409s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/pythonpath.dsv'
+[1.410s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/hook/pythonpath.sh'
+[1.411s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/bin'
 [1.411s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(lunar_robot_autonomous)
-[1.411s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.ps1'
-[1.412s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.dsv'
-[1.412s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.sh'
-[1.413s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.bash'
-[1.413s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.zsh'
-[1.413s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/colcon-core/packages/lunar_robot_autonomous)
-[1.436s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware' for CMake module files
-[1.437s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_hardware' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_hardware build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_hardware/install.log --single-version-externally-managed install_data
-[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware' for CMake config files
-[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/lib'
-[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/bin'
-[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/lib/pkgconfig/lunar_robot_hardware.pc'
-[1.438s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages'
+[1.411s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.ps1'
+[1.412s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.dsv'
+[1.412s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.sh'
+[1.413s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.bash'
+[1.413s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/package.zsh'
+[1.413s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/share/colcon-core/packages/lunar_robot_autonomous)
+[1.436s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware' for CMake module files
+[1.437s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/cheese/lunar_rover_ws/src/lunar_robot_hardware' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/cheese/lunar_rover_ws/build/lunar_robot_hardware/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_hardware build --build-base /home/cheese/lunar_rover_ws/build/lunar_robot_hardware/build install --record /home/cheese/lunar_rover_ws/build/lunar_robot_hardware/install.log --single-version-externally-managed install_data
+[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware' for CMake config files
+[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/lib'
+[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/bin'
+[1.437s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/lib/pkgconfig/lunar_robot_hardware.pc'
+[1.438s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/lib/python3.12/site-packages'
 [1.438s] Level 1:colcon.colcon_core.shell:create_environment_hook('lunar_robot_hardware', 'pythonpath')
-[1.438s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/pythonpath.ps1'
-[1.438s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/pythonpath.dsv'
-[1.438s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/pythonpath.sh'
-[1.439s] Level 1:colcon.colcon_core.environment:checking '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/bin'
+[1.438s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/pythonpath.ps1'
+[1.438s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/pythonpath.dsv'
+[1.438s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/hook/pythonpath.sh'
+[1.439s] Level 1:colcon.colcon_core.environment:checking '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/bin'
 [1.439s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(lunar_robot_hardware)
-[1.439s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.ps1'
-[1.439s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.dsv'
-[1.440s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.sh'
-[1.441s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.bash'
-[1.441s] INFO:colcon.colcon_core.shell:Creating package script '/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.zsh'
-[1.442s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware/share/colcon-core/packages/lunar_robot_hardware)
+[1.439s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.ps1'
+[1.439s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.dsv'
+[1.440s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.sh'
+[1.441s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.bash'
+[1.441s] INFO:colcon.colcon_core.shell:Creating package script '/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/lunar_robot_hardware/package.zsh'
+[1.442s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/cheese/lunar_rover_ws/install/lunar_robot_hardware/share/colcon-core/packages/lunar_robot_hardware)
 [1.442s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
 [1.443s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
 [1.443s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '0'
@@ -269,13 +269,13 @@
 [1.452s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
 [1.452s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
 [1.469s] DEBUG:colcon.colcon_core.event_reactor:joined thread
-[1.469s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rileydunn/lunar_rover_ws/install/local_setup.ps1'
-[1.470s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/rileydunn/lunar_rover_ws/install/_local_setup_util_ps1.py'
-[1.470s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rileydunn/lunar_rover_ws/install/setup.ps1'
-[1.472s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rileydunn/lunar_rover_ws/install/local_setup.sh'
-[1.472s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/rileydunn/lunar_rover_ws/install/_local_setup_util_sh.py'
-[1.473s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rileydunn/lunar_rover_ws/install/setup.sh'
-[1.475s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rileydunn/lunar_rover_ws/install/local_setup.bash'
-[1.476s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rileydunn/lunar_rover_ws/install/setup.bash'
-[1.479s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rileydunn/lunar_rover_ws/install/local_setup.zsh'
-[1.479s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rileydunn/lunar_rover_ws/install/setup.zsh'
+[1.469s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/cheese/lunar_rover_ws/install/local_setup.ps1'
+[1.470s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/cheese/lunar_rover_ws/install/_local_setup_util_ps1.py'
+[1.470s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/cheese/lunar_rover_ws/install/setup.ps1'
+[1.472s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/cheese/lunar_rover_ws/install/local_setup.sh'
+[1.472s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/cheese/lunar_rover_ws/install/_local_setup_util_sh.py'
+[1.473s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/cheese/lunar_rover_ws/install/setup.sh'
+[1.475s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/cheese/lunar_rover_ws/install/local_setup.bash'
+[1.476s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/cheese/lunar_rover_ws/install/setup.bash'
+[1.479s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/cheese/lunar_rover_ws/install/local_setup.zsh'
+[1.479s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/cheese/lunar_rover_ws/install/setup.zsh'

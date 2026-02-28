@@ -12,10 +12,10 @@ running install
 running install_lib
 running install_data
 running install_egg_info
-removing '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info' (and everything under it)
-Copying ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info
+removing '/home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info' (and everything under it)
+Copying ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info to /home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info
 running install_scripts
-Installing multi_waypoint_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
-Installing unified_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
-Installing waypoint_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
-writing list of installed files to '/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log'
+Installing multi_waypoint_navigator script to /home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+Installing unified_navigator script to /home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+Installing waypoint_navigator script to /home/cheese/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+writing list of installed files to '/home/cheese/lunar_rover_ws/build/lunar_robot_autonomous/install.log'
