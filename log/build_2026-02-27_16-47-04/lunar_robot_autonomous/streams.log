@@ -1,0 +1,50 @@
+[0.589s] Invoking command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
+[0.740s] running egg_info
+[0.741s] creating ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info
+[0.750s] writing ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/PKG-INFO
+[0.750s] writing dependency_links to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/dependency_links.txt
+[0.750s] writing entry points to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/entry_points.txt
+[0.751s] writing requirements to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/requires.txt
+[0.751s] writing top-level names to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/top_level.txt
+[0.751s] writing manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+[0.770s] reading manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+[0.771s] writing manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+[0.771s] running build
+[0.771s] running build_py
+[0.771s] creating /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build
+[0.772s] creating /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib
+[0.772s] creating /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous
+[0.772s] copying lunar_robot_autonomous/__init__.py -> /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous
+[0.772s] copying lunar_robot_autonomous/waypoint_navigator.py -> /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous
+[0.772s] copying lunar_robot_autonomous/multi_waypoint_navigator.py -> /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous
+[0.772s] copying lunar_robot_autonomous/unified_navigator.py -> /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous
+[0.772s] running install
+[0.776s] running install_lib
+[0.786s] creating /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous
+[0.786s] copying /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous/__init__.py -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous
+[0.786s] copying /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous/waypoint_navigator.py -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous
+[0.786s] copying /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous/multi_waypoint_navigator.py -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous
+[0.786s] copying /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build/lib/lunar_robot_autonomous/unified_navigator.py -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous
+[0.786s] byte-compiling /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous/__init__.py to __init__.cpython-312.pyc
+[0.786s] byte-compiling /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous/waypoint_navigator.py to waypoint_navigator.cpython-312.pyc
+[0.788s] byte-compiling /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous/multi_waypoint_navigator.py to multi_waypoint_navigator.cpython-312.pyc
+[0.789s] byte-compiling /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous/unified_navigator.py to unified_navigator.cpython-312.pyc
+[0.792s] running install_data
+[0.792s] creating /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/ament_index
+[0.792s] creating /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/ament_index/resource_index
+[0.792s] creating /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/ament_index/resource_index/packages
+[0.792s] copying resource/lunar_robot_autonomous -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/ament_index/resource_index/packages
+[0.792s] copying package.xml -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous
+[0.792s] creating /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/launch
+[0.792s] copying launch/unified_navigation.launch.py -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/launch
+[0.793s] creating /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/config
+[0.793s] copying config/obstical_avoidance.yaml -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/config
+[0.793s] copying config/path_planner.yaml -> /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/share/lunar_robot_autonomous/config
+[0.793s] running install_egg_info
+[0.804s] Copying ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info
+[0.804s] running install_scripts
+[0.876s] Installing multi_waypoint_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+[0.876s] Installing unified_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+[0.876s] Installing waypoint_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+[0.876s] writing list of installed files to '/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log'
+[0.896s] Invoked command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data

@@ -1,1 +1,124 @@
-/home/cheese/lunar_rover_ws/src/lunar_robot_description/config/real_hardware_navigation.rviz
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 48; 48; 48
+
+  Displays:
+    # Grid
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Reference Frame: base_link
+      Enabled: true
+      Cell Size: 0.5
+      Color: 160; 160; 164
+      Plane Cell Count: 20
+
+    # Front D435 RGB Camera Image
+    - Class: rviz_default_plugins/Image
+      Name: "Front D435 RGB"
+      Enabled: true
+      Topic:
+        Value: /camera/camera/color/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Queue Size: 1
+      Transport: raw
+
+    # Front D435 Depth Image  
+    - Class: rviz_default_plugins/Image
+      Name: "Front D435 Depth"
+      Enabled: true
+      Topic:
+        Value: /camera/camera/aligned_depth_to_color/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Queue Size: 1
+      Transport: raw
+      Normalize Range: true
+
+    # Rear T265 Camera Image
+    - Class: rviz_default_plugins/Image
+      Name: "Rear T265 RGB"
+      Enabled: true
+      Topic:
+        Value: /camera_rear/camera/color/image_raw
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Queue Size: 1
+      Transport: raw
+
+    # Front D435 Point Cloud (CRITICAL FOR NAVIGATION!)
+    - Class: rviz_default_plugins/PointCloud2
+      Name: "D435 Point Cloud"
+      Enabled: true
+      Topic:
+        Value: /camera/camera/depth/color/points
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Queue Size: 1
+      Size (m): 0.01
+      Style: Points
+      Color Transformer: RGB8
+      Use Fixed Frame: true
+      Use rainbow: false
+
+    # Goal Marker (for point-click navigation)
+    - Class: rviz_default_plugins/MarkerArray
+      Name: "Navigation Goals"
+      Enabled: true
+      Topic:
+        Value: /goal_markers
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+
+    # Path Display (if your navigator publishes paths)
+    - Class: rviz_default_plugins/Path
+      Name: "Planned Path"
+      Enabled: true
+      Topic:
+        Value: /planned_path
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Color: 25; 255; 0
+      Line Style: Lines
+      Line Width: 0.03
+
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3.0
+      Enable Stereo Rendering: false
+      Focal Point:
+        X: 1.0
+        Y: 0
+        Z: 0
+      Pitch: 0.5
+      Target Frame: base_link
+      Yaw: 0
+
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/SetGoal
+      Topic: /goal_pose
+    - Class: rviz_default_plugins/PublishPoint
+      Topic: /clicked_point

@@ -1,8 +1,8 @@
-# Install script for directory: /home/cheese/lunar_rover_ws/src/lunar_robot_description
+# Install script for directory: /home/rileydunn/lunar_rover_ws/src/lunar_robot_description
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/home/cheese/lunar_rover_ws/install/lunar_robot_description")
+  set(CMAKE_INSTALL_PREFIX "/home/rileydunn/lunar_rover_ws/install/lunar_robot_description")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -43,7 +43,70 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  include("/home/cheese/lunar_rover_ws/build/lunar_robot_description/ament_cmake_symlink_install/ament_cmake_symlink_install.cmake")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE DIRECTORY FILES "/home/rileydunn/lunar_rover_ws/src/lunar_robot_description/urdf")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE DIRECTORY FILES "/home/rileydunn/lunar_rover_ws/src/lunar_robot_description/config")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/package_run_dependencies" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/lunar_robot_description")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/parent_prefix_path" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_index/share/ament_index/resource_index/parent_prefix_path/lunar_robot_description")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description/environment" TYPE FILE FILES "/opt/ros/jazzy/share/ament_cmake_core/cmake/environment_hooks/environment/ament_prefix_path.sh")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description/environment" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/ament_prefix_path.dsv")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description/environment" TYPE FILE FILES "/opt/ros/jazzy/share/ament_cmake_core/cmake/environment_hooks/environment/path.sh")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description/environment" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/path.dsv")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/local_setup.bash")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/local_setup.sh")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/local_setup.zsh")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/local_setup.dsv")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_environment_hooks/package.dsv")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/packages" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_index/share/ament_index/resource_index/packages/lunar_robot_description")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description/cmake" TYPE FILE FILES
+    "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_core/lunar_robot_descriptionConfig.cmake"
+    "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/ament_cmake_core/lunar_robot_descriptionConfig-version.cmake"
+    )
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/lunar_robot_description" TYPE FILE FILES "/home/rileydunn/lunar_rover_ws/src/lunar_robot_description/package.xml")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)
@@ -54,5 +117,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/cheese/lunar_rover_ws/build/lunar_robot_description/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

@@ -1,0 +1,23 @@
+[0.580s] Invoking command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
+[0.732s] running egg_info
+[0.742s] writing ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/PKG-INFO
+[0.742s] writing dependency_links to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/dependency_links.txt
+[0.742s] writing entry points to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/entry_points.txt
+[0.742s] writing requirements to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/requires.txt
+[0.742s] writing top-level names to ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/top_level.txt
+[0.762s] reading manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+[0.762s] writing manifest file '../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info/SOURCES.txt'
+[0.762s] running build
+[0.762s] running build_py
+[0.763s] running install
+[0.767s] running install_lib
+[0.777s] running install_data
+[0.777s] running install_egg_info
+[0.788s] removing '/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info' (and everything under it)
+[0.788s] Copying ../../build/lunar_robot_autonomous/lunar_robot_autonomous.egg-info to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages/lunar_robot_autonomous-1.0.0-py3.12.egg-info
+[0.788s] running install_scripts
+[0.859s] Installing multi_waypoint_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+[0.859s] Installing unified_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+[0.859s] Installing waypoint_navigator script to /home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/lunar_robot_autonomous
+[0.859s] writing list of installed files to '/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log'
+[0.877s] Invoked command in '/home/rileydunn/lunar_rover_ws/src/lunar_robot_autonomous' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/lunar_robot_autonomous build --build-base /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/build install --record /home/rileydunn/lunar_rover_ws/build/lunar_robot_autonomous/install.log --single-version-externally-managed install_data
