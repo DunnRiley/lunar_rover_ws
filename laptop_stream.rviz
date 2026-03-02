@@ -5,7 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 300
+    Tree Height: 138
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
@@ -58,8 +58,24 @@ Visualization Manager:
       Show Arrows: true
       Show Axes: true
       Show Names: true
+      Tree:
+        base_link:
+          camera_link:
+            camera_color_frame:
+              camera_color_optical_frame:
+                {}
+            camera_depth_frame:
+              {}
+            camera_depth_optical_frame:
+              {}
+          camera_rear_link:
+            {}
       Update Interval: 0
       Value: true
+
+    # ── FRONT RGB CAMERA ───────────────────────────────────────────────────
+    # Transport MUST be "compressed" when subscribing to CompressedImage topic.
+    # Without this RViz silently shows nothing.
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -72,9 +88,11 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/color/stream
+        Value: /camera/color/stream/compressed
       Transport Hint: compressed
       Value: true
+
+    # ── FRONT DEPTH CAMERA ─────────────────────────────────────────────────
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -87,9 +105,11 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/depth/stream
+        Value: /camera/depth/stream/compressed
       Transport Hint: compressed
       Value: true
+
+    # ── REAR STEREO CAMERA ─────────────────────────────────────────────────
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -102,9 +122,10 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera_rear/stream
+        Value: /camera_rear/stream/compressed
       Transport Hint: compressed
       Value: true
+
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Navigation Goals
@@ -205,13 +226,13 @@ Window Geometry:
     collapsed: false
   Front Depth:
     collapsed: false
-  Height: 900
+  Height: 1030
   Hide Left Dock: false
   Hide Right Dock: false
   Rear Stereo:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1400
-  X: 50
-  Y: 50
+  Width: 1600
+  X: 658
+  Y: 522

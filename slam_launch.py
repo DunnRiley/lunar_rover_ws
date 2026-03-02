@@ -12,6 +12,15 @@ Usage:
   python3 slam_launch.py --localize   # localize against saved map
 
 Then in a second terminal:  bash slam_laptop.sh
+
+FIX NOTE (2024):
+  The original script used `ros2 launch realsense2_camera rs_launch.py`
+  which fails if the `launch` ros2 verb is not available in the subprocess
+  environment (common issue — ros2launch extension not in PATH for child procs).
+  
+  Camera is now launched via `ros2 run realsense2_camera realsense2_camera_node`
+  with all parameters passed as --ros-args -p flags. This is more reliable and
+  doesn't depend on the launch infrastructure being available.
 """
 
 import argparse
@@ -20,7 +29,6 @@ import signal
 import subprocess
 import sys
 import time
-import xml.etree.ElementTree as ET
 
 # ── Args ─────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
@@ -72,6 +80,34 @@ def run(*cmd, log=None, check_delay=None):
             cleanup()
     return p
 
+def run_shell(cmd_str, log=None, check_delay=None):
+    """
+    Launch via bash -c so the full environment (including ros2 launch verb)
+    is available. Use this for commands that need ros2 launch.
+    """
+    env = os.environ.copy()
+    stdout = open(log, 'w') if log else None
+    stderr = open(log, 'a') if log else None
+    p = subprocess.Popen(
+        ['bash', '-c', cmd_str],
+        env=env, stdout=stdout, stderr=stderr
+    )
+    PROCS.append(p)
+    if check_delay:
+        time.sleep(check_delay)
+        if p.poll() is not None:
+            print(f'\n✗ Process died (shell cmd): {cmd_str[:60]}')
+            if log:
+                print(f'  Last log lines ({log}):')
+                try:
+                    lines = open(log).readlines()
+                    for l in lines[-20:]:
+                        print('   ', l.rstrip())
+                except Exception:
+                    pass
+            cleanup()
+    return p
+
 def wait_for_topic(topic, timeout=30):
     """Poll until a topic appears in ros2 topic list."""
     print(f'  Waiting for {topic}...', end='', flush=True)
@@ -89,12 +125,9 @@ def wait_for_topic(topic, timeout=30):
     return False
 
 def wait_for_tf(source, target, timeout=20):
-    """Poll TF tree by checking /tf topic for the source frame, with proper timeout handling."""
-    print(f'  Waiting for TF {source}\u2192{target}...', end='', flush=True)
+    """Poll TF tree."""
+    print(f'  Waiting for TF {source}→{target}...', end='', flush=True)
     for _ in range(timeout):
-        # Use ros2 topic echo with --once and a short timeout via Popen+communicate
-        # tf2_echo is a long-running node so we can't use subprocess.run on it safely.
-        # Instead check if source frame appears in /tf_static or /tf broadcasts.
         try:
             proc = subprocess.Popen(
                 ['ros2', 'topic', 'echo', '--once', '--no-daemon', '/tf_static'],
@@ -110,14 +143,12 @@ def wait_for_tf(source, target, timeout=20):
                 proc.kill()
         except Exception:
             pass
-        # Also check via ros2 node list that robot_state_publisher is up
         try:
             result = subprocess.run(
                 ['ros2', 'node', 'list'],
                 capture_output=True, text=True, timeout=5
             )
             if 'robot_state_publisher' in result.stdout:
-                # RSP is up — give it 1 more second then proceed
                 time.sleep(1)
                 print(' ✓ (rsp confirmed)')
                 return True
@@ -129,10 +160,10 @@ def wait_for_tf(source, target, timeout=20):
     return False
 
 # ── ROS env ───────────────────────────────────────────────────────────────
+ROS_DISTRO = 'unknown'
 for ros_setup in ['/opt/ros/jazzy/setup.bash', '/opt/ros/humble/setup.bash']:
     if os.path.exists(ros_setup):
         ROS_DISTRO = 'jazzy' if 'jazzy' in ros_setup else 'humble'
-        # Source by reading env from a subprocess
         result = subprocess.run(
             ['bash', '-c', f'source {ros_setup} && env'],
             capture_output=True, text=True
@@ -234,7 +265,6 @@ run('ros2', 'run', 'robot_state_publisher', 'robot_state_publisher',
 
 time.sleep(1)
 
-# Static TFs: camera_link → optical frames (90° rotation)
 for child in ['camera_depth_optical_frame', 'camera_color_optical_frame']:
     run('ros2', 'run', 'tf2_ros', 'static_transform_publisher',
         '--x', '0', '--y', '0', '--z', '0',
@@ -243,7 +273,6 @@ for child in ['camera_depth_optical_frame', 'camera_color_optical_frame']:
         '--child-frame-id', child,
         log='/dev/null')
 
-# Identity map→odom so RViz has a valid map frame before first keyframe
 run('ros2', 'run', 'tf2_ros', 'static_transform_publisher',
     '--x', '0', '--y', '0', '--z', '0',
     '--qx', '0', '--qy', '0', '--qz', '0', '--qw', '1',
@@ -333,24 +362,86 @@ print()
 
 # ── [3/5] CAMERA ─────────────────────────────────────────────────────────
 print('[3/5] D435 Camera...')
+print('  Launching via ros2 run (avoids launch-verb availability issues)...')
 
-run('ros2', 'launch', 'realsense2_camera', 'rs_launch.py',
-    'camera_name:=camera',
-    'camera_namespace:=camera',
-    'enable_depth:=true',
-    'enable_color:=true',
-    'enable_infra1:=false',
-    'enable_infra2:=false',
-    'pointcloud.enable:=true',
-    'align_depth.enable:=true',
-    'enable_sync:=true',
-    'depth_module.profile:=640x480x15',
-    'rgb_camera.profile:=640x480x15',
-    log='/tmp/slam_camera.log')
+# ── APPROACH: ros2 run instead of ros2 launch ──────────────────────────
+#
+# WHY: `ros2 launch` requires the ros2launch Python entry point to be
+# registered in the subprocess environment. When Python spawns a child
+# process, even with env=os.environ.copy(), the ros2 launch verb is
+# sometimes missing if the ROS2 overlay wasn't sourced in the same shell.
+#
+# ros2 run works reliably because it only needs the ament index, which
+# IS in the environment after we sourced setup.bash above.
+#
+# The realsense2_camera node accepts all the same parameters that
+# rs_launch.py sets, just passed directly as --ros-args -p flags.
+# We push the node into the "camera" namespace to match the topic
+# structure (/camera/camera/color/image_raw etc.) that the rest of
+# the pipeline expects.
 
-if not wait_for_topic('/camera/camera/color/image_raw', timeout=30):
-    print('  ✗ Camera failed — check: tail /tmp/slam_camera.log')
+run('ros2', 'run', 'realsense2_camera', 'realsense2_camera_node',
+    '--ros-args',
+    '--remap', '__ns:=/camera',
+    '--remap', '__node:=camera',
+    '-p', 'camera_name:=camera',
+    '-p', 'enable_depth:=true',
+    '-p', 'enable_color:=true',
+    '-p', 'enable_infra1:=false',
+    '-p', 'enable_infra2:=false',
+    '-p', 'enable_sync:=true',
+    '-p', 'align_depth.enable:=true',
+    '-p', 'pointcloud.enable:=true',
+    '-p', 'depth_module.profile:=640x480x15',
+    '-p', 'rgb_camera.profile:=640x480x15',
+    log='/tmp/slam_camera.log',
+    check_delay=3)
+
+# Wait for the color image topic — primary liveness check
+color_topic = '/camera/camera/color/image_raw'
+if not wait_for_topic(color_topic, timeout=30):
+    print()
+    print('  ✗ Camera failed to publish. Checking common causes...')
+    print()
+    # Try to give a helpful diagnosis from the log
+    try:
+        log_text = open('/tmp/slam_camera.log').read()
+        if 'permission denied' in log_text.lower() or 'LIBUSB' in log_text:
+            print('  ► USB/permission error detected.')
+            print('    Fix: sudo chmod a+rw /dev/bus/usb/*/*')
+            print('    Or:  sudo usermod -aG plugdev $USER  (then log out/in)')
+        elif 'No device found' in log_text or 'no RealSense' in log_text.lower():
+            print('  ► Camera not detected on USB.')
+            print('    Check: lsusb | grep Intel')
+            print('    Try a different USB3 port (blue port required for D435).')
+        elif 'could not load library' in log_text.lower() or 'librealsense' in log_text.lower():
+            print('  ► librealsense not installed or wrong version.')
+            print('    Fix: sudo apt install ros-jazzy-realsense2-camera')
+            print('         sudo apt install librealsense2-dkms librealsense2-utils')
+        else:
+            print('  ► Unknown error. Last 25 lines of /tmp/slam_camera.log:')
+            lines = log_text.splitlines()
+            for l in lines[-25:]:
+                print('    ', l)
+    except Exception as e:
+        print(f'  (could not read log: {e})')
+    print()
+    print('  Full log: tail -50 /tmp/slam_camera.log')
     cleanup()
+
+# Also wait for depth (aligned) — needed by RTAB-Map
+depth_topic = '/camera/camera/aligned_depth_to_color/image_raw'
+print(f'  Waiting for aligned depth...', end='', flush=True)
+for _ in range(15):
+    result = subprocess.run(['ros2', 'topic', 'list'], capture_output=True, text=True, timeout=5)
+    if depth_topic in result.stdout:
+        print(' ✓')
+        break
+    print('.', end='', flush=True)
+    time.sleep(1)
+else:
+    print(' ✗ (aligned depth timeout — align_depth may not have enabled)')
+    print('  WARNING: Continuing but RTAB-Map may fail.')
 
 run('ros2', 'run', 'depthimage_to_laserscan', 'depthimage_to_laserscan_node',
     '--ros-args',
@@ -369,14 +460,10 @@ print()
 # ── [4/5] VISUAL ODOMETRY ─────────────────────────────────────────────────
 print('[4/5] RTAB-Map visual odometry...')
 
-# Parameters are Python strings — no shell, no type inference, no quoting issues.
-# ROS2 Python API receives them directly as strings, which is exactly what
-# RTAB-Map expects for its Odom/*, Vis/* parameter family.
 VODOM_YAML = '/tmp/vodom_params.yaml'
 with open(VODOM_YAML, 'w') as yf:
     yf.write("""rgbd_odometry:
   ros__parameters:
-    # Native ROS2 typed params
     frame_id: "base_link"
     odom_frame_id: "odom"
     publish_tf: true
@@ -384,51 +471,15 @@ with open(VODOM_YAML, 'w') as yf:
     approx_sync_max_interval: 0.2
     wait_for_transform: 0.5
     queue_size: 30
-    # RTAB-Map internal params — string type in parameter server
-    #
-    # Odom/Strategy: "0" = Frame-to-Map (F2M) — robust, keeps a local map
-    #   of features and matches new frames against it. Better than F2F (1)
-    #   for slow handheld motion since it doesn't need consecutive frames
-    #   to overlap perfectly.
     Odom/Strategy: "0"
-    #
-    # Odom/GuessMotion: "true" — use previous velocity to predict next pose.
-    #   Helps when camera moves smoothly; reduces search space for matching.
     Odom/GuessMotion: "true"
-    #
-    # Odom/ResetCountdown: "0" — CRITICAL: disable auto-reset on tracking loss.
-    #   Default "1" means one failed frame = full odometry reset = map wipe.
-    #   "0" means keep trying to recover instead of resetting immediately.
     Odom/ResetCountdown: "0"
-    #
-    # Vis/FeatureType: "8" = SIFT — more robust to lighting/blur than ORB (6)
-    #   or GFTT (0). Slower but much better for indoor handheld use.
-    #   Fall back to "0" (GFTT+BRIEF) if too slow on this hardware.
     Vis/FeatureType: "6"
-    #
-    # Vis/MaxFeatures: "1000" — more features = more chances to find matches
-    #   when the scene has low texture or partial occlusion.
     Vis/MaxFeatures: "500"
-    #
-    # Vis/MinInliers: "6" — lowered from 8. Minimum inliers to accept a
-    #   frame. Lower = more tolerant of difficult scenes; higher = more
-    #   accurate but resets more often. 6 is a good balance.
     Vis/MinInliers: "6"
-    #
-    # Vis/MaxDepth: "4.0" — ignore depth beyond 4m. D435 depth quality
-    #   degrades past ~3-4m indoors; distant noisy points hurt matching.
     Vis/MaxDepth: "4.0"
-    #
-    # Vis/MinDepth: "0.3" — ignore depth closer than 30cm (D435 minimum
-    #   reliable range). Eliminates noise from objects too close to camera.
     Vis/MinDepth: "0.3"
-    #
-    # Odom/FilteringStrategy: "1" — Kalman filter on odometry output.
-    #   Smooths jitter between frames, especially important for slow motion.
     Odom/FilteringStrategy: "1"
-    #
-    # F2M local map size — keep last 2000 features in the local map for
-    #   Frame-to-Map matching. Larger = more robust, more CPU.
     OdomF2M/MaxSize: "1000"
 """)
 
@@ -440,7 +491,6 @@ run('ros2', 'run', 'rtabmap_odom', 'rgbd_odometry',
     '--remap', 'depth/image:=/camera/camera/aligned_depth_to_color/image_raw',
     log='/tmp/slam_vodom.log')
 
-# Poll — catch immediate crashes
 print('  Polling for visual odometry...', end='', flush=True)
 vodom_proc = PROCS[-1]
 for i in range(12):
@@ -456,10 +506,9 @@ for i in range(12):
         except Exception:
             pass
         cleanup()
-    # Consider it up once it's logged its params
     try:
         log_text = open('/tmp/slam_vodom.log').read()
-        if 'stereoParams_' in log_text:
+        if 'stereoParams_' in log_text or 'Odom initialized' in log_text:
             print(f' ✓ (up at {i+1}s)')
             break
     except Exception:
@@ -484,15 +533,8 @@ else:
     incremental = 'true'
     print('  Mode: MAPPING (fresh)')
 
-# ROS2 CLI parses -p values with yaml.safe_load() internally.
-# This means: 0.05 → float, true/false → bool, integers → int, text → str.
-# subprocess.Popen passes args as raw bytes to the kernel, so ROS2 receives
-# them exactly as written. The trick for string params that look like
-# bool/number is YAML single-quoting: "'false'" → yaml parses as str "false".
-
 run('ros2', 'run', 'rtabmap_slam', 'rtabmap',
     '--ros-args',
-    # Native ROS2 typed params (yaml.safe_load does the right thing)
     '-p', 'frame_id:=base_link',
     '-p', 'odom_frame_id:=odom',
     '-p', 'map_frame_id:=map',
@@ -504,14 +546,12 @@ run('ros2', 'run', 'rtabmap_slam', 'rtabmap',
     '-p', 'wait_for_transform:=0.5',
     '-p', 'queue_size:=30',
     '-p', 'topic_queue_size:=30',
-    # Grid/* — native double/bool in rtabmap_ros; yaml parses correctly
     "-p", "Grid/CellSize:='0.05'",
     "-p", "Grid/RangeMax:='5.0'",
     "-p", "Grid/MaxObstacleHeight:='0.6'",
     "-p", "Grid/MinObstacleHeight:='0.02'",
     "-p", "Grid/DepthDecimation:='2'",
     "-p", "Grid/FromDepth:='true'",
-    # RTAB-Map internal string params — single-quoted so yaml returns str
     "-p", "Rtabmap/DetectionRate:='1.0'",
     "-p", "RGBD/LinearUpdate:='0.2'",
     "-p", "RGBD/AngularUpdate:='0.2'",
@@ -547,7 +587,6 @@ for i in range(15):
             print('  Last log lines:')
             for l in lines[-25:]:
                 print('   ', l)
-            # Parse the specific InvalidParameterTypeException for actionable advice
             import re
             m = re.search(r"parameter '([^']+)' has invalid type.*parameter \{[^}]+\} is of type \{(\w+)\}", log_text)
             if m:
@@ -555,14 +594,11 @@ for i in range(15):
                 print()
                 print(f'  ► PARAM TYPE MISMATCH: {param!r} is declared as {declared_type!r}')
                 if declared_type == 'string':
-                    print(f'    Fix: value must be single-quoted in the -p arg')
-                    print(f'    e.g.  "-p", "{param}:=\'value\'"')
+                    print(f'    Fix: value must be single-quoted: "-p", "{param}:=\'value\'"')
                 elif declared_type == 'double':
-                    print(f'    Fix: value must be unquoted float')
-                    print(f'    e.g.  "-p", "{param}:=0.05"')
+                    print(f'    Fix: value must be unquoted float: "-p", "{param}:=0.05"')
                 elif declared_type == 'bool':
-                    print(f'    Fix: value must be unquoted true/false')
-                    print(f'    e.g.  "-p", "{param}:=true"')
+                    print(f'    Fix: value must be unquoted: "-p", "{param}:=true"')
         except Exception as e:
             print(f'  (could not read log: {e})')
         cleanup()
