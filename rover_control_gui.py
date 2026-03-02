@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Lunar Rover Mission Control GUI  —  rover_control_gui.py
-UPDATED: Arc/Pivot turn modes, arc ratio slider, swapped stick layout.
+UPDATED: Arc-only turn mode, arc ratio slider, swapped stick layout.
 """
 
 import os, sys, math, subprocess, threading, time
@@ -28,8 +28,7 @@ MINIPC_IP   = "192.168.0.102"
 MINIPC_WS   = "~/lunar_rover_ws"
 RVIZ_CONFIG = os.path.expanduser("~/lunar_rover_ws/laptop_stream.rviz")
 
-PIVOT = 'PIVOT'
-ARC   = 'ARC'
+ARC = 'ARC'
 
 # ═════════════════════════════════════════════════════════════════════════
 # TELEOP PUBLISHER
@@ -37,7 +36,6 @@ ARC   = 'ARC'
 class TeleopPublisher(QThread):
     status_changed = pyqtSignal(str)
     speed_changed  = pyqtSignal(float)
-    mode_changed   = pyqtSignal(str)   # 'PIVOT' or 'ARC'
     ratio_changed  = pyqtSignal(int)   # 0-100
 
     # ── Xbox USB axis/button mapping ──────────────────────────────────────
@@ -46,10 +44,8 @@ class TeleopPublisher(QThread):
     # Wiggle Left  stick left/right → AXIS_TURN (typically 0)
     AXIS_DRIVE   = 4    # Right stick Y  (+1 = forward)
     AXIS_TURN    = 0    # Left  stick X  (+1 = right)
-    BTN_A        = 0    # PIVOT mode
-    BTN_B        = 1    # Speed DOWN
-    BTN_X        = 2    # Speed UP
-    BTN_Y        = 3    # ARC mode
+    BTN_B        = 1     # Speed DOWN
+    BTN_X        = 2     # Speed UP
     BTN_LB       = 4    # Actuator extend
     BTN_RB       = 5    # Actuator retract
     BTN_START    = 7    # E-stop
@@ -129,23 +125,6 @@ class TeleopPublisher(QThread):
         try:
             ax  = lambda i: msg.axes[i]    if i < len(msg.axes)    else 0.0
             btn = lambda i: msg.buttons[i] if i < len(msg.buttons) else 0
-
-            # Turn mode
-            if self._rising(self.BTN_A, btn(self.BTN_A)):
-                with self._lock:
-                    self._mode = PIVOT
-                self.mode_changed.emit(PIVOT)
-                self.status_changed.emit('Turn mode: PIVOT')
-                if self._mode_pub:
-                    m = String(); m.data = PIVOT; self._mode_pub.publish(m)
-
-            if self._rising(self.BTN_Y, btn(self.BTN_Y)):
-                with self._lock:
-                    self._mode = ARC
-                self.mode_changed.emit(ARC)
-                self.status_changed.emit(f'Turn mode: ARC  ratio={self._ratio}')
-                if self._mode_pub:
-                    m = String(); m.data = ARC; self._mode_pub.publish(m)
 
             # Speed
             if self._rising(self.BTN_X, btn(self.BTN_X)):
@@ -496,7 +475,7 @@ class MissionControl(QWidget):
 
         ctrl_info = QLabel(
             "LB = extend  ·  RB = retract\n"
-            "X = speed+  ·  B = speed−  ·  A = pivot  ·  Y = arc"
+            "X = speed+  ·  B = speed−"
         )
         ctrl_info.setStyleSheet("color:#3a5060; font-size:9px; padding:2px 0;")
         tl.addWidget(ctrl_info)
@@ -514,28 +493,10 @@ class MissionControl(QWidget):
         sr.addWidget(self.speed_label)
         tl.addLayout(sr)
 
-        # Turn mode buttons
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("Turn:"))
-        self.pivot_btn = self._make_btn("A  PIVOT", "#1a1520", "#503060", "#9050c0")
-        self.arc_btn   = self._make_btn("Y  ARC",   "#101828", "#1a4060", "#2a80c0")
-        self.pivot_btn.setCheckable(True)
-        self.arc_btn.setCheckable(True)
-        self.arc_btn.setChecked(True)   # default arc
-        self.pivot_btn.clicked.connect(lambda: self._set_turn_mode(PIVOT))
-        self.arc_btn.clicked.connect(lambda:   self._set_turn_mode(ARC))
-        mode_row.addWidget(self.pivot_btn)
-        mode_row.addWidget(self.arc_btn)
-        self.mode_label = QLabel("ARC")
-        self.mode_label.setStyleSheet(
-            "color:#2a80c0; font-size:10px; font-weight:bold; min-width:50px;")
-        mode_row.addWidget(self.mode_label)
-        tl.addLayout(mode_row)
-
         # Arc ratio slider
         arc_row = QHBoxLayout()
         arc_lbl = QLabel("Arc tightness:")
-        arc_lbl.setToolTip("0 = tight (near-pivot)   100 = wide arc")
+        arc_lbl.setToolTip("0 = inner wheel stops (tightest arc)   100 = both wheels equal (straight)")
         arc_row.addWidget(arc_lbl)
         self.arc_slider = QSlider(Qt.Horizontal)
         self.arc_slider.setRange(0, 100)
@@ -598,7 +559,7 @@ class MissionControl(QWidget):
 
         self._log("Mission Control ready.")
         self._log("Right stick Y = drive  |  Left stick X = turn")
-        self._log("A = pivot mode  |  Y = arc mode  |  Arc slider = tightness")
+        self._log("Arc slider: 0=tight  100=straight  |  X=spd+  B=spd-")
         if not ROS_AVAILABLE:
             self._log("⚠  rclpy not found — teleop disabled")
 
@@ -706,17 +667,14 @@ class MissionControl(QWidget):
         self._teleop_thread = TeleopPublisher()
         self._teleop_thread.status_changed.connect(self._log)
         self._teleop_thread.speed_changed.connect(self._on_ctrl_speed)
-        self._teleop_thread.mode_changed.connect(self._on_mode_changed)
-        # Sync slider values into the new thread
+        # Sync arc ratio slider into the new thread
         self._teleop_thread.set_arc_ratio(self.arc_slider.value())
-        self._teleop_thread.set_mode(
-            PIVOT if self.pivot_btn.isChecked() else ARC)
         self._teleop_thread.start()
         self._teleop_active = True
         self.teleop_led.set_color("green")
         self.teleop_btn.setText("STOP TELEOP")
         self._log("Teleop started — Right stick=drive  Left stick=turn")
-        self._log("A=pivot  Y=arc  X=spd+  B=spd-  LB=extend  RB=retract")
+        self._log("X=spd+  B=spd-  LB=extend  RB=retract  Start=estop")
 
     def _stop_teleop(self):
         if self._teleop_thread:
@@ -745,28 +703,9 @@ class MissionControl(QWidget):
         if self._teleop_thread:
             self._teleop_thread.set_speed(spd)
 
-    # ── Turn mode ─────────────────────────────────────────────────────────
-    def _set_turn_mode(self, mode: str):
-        self.pivot_btn.setChecked(mode == PIVOT)
-        self.arc_btn.setChecked(mode == ARC)
-        color = "#9050c0" if mode == PIVOT else "#2a80c0"
-        self.mode_label.setText(mode)
-        self.mode_label.setStyleSheet(
-            f"color:{color}; font-size:10px; font-weight:bold; min-width:50px;")
-        # Arc slider only meaningful in ARC mode — dim it in PIVOT
-        self.arc_slider.setEnabled(mode == ARC)
-        self.arc_label.setEnabled(mode == ARC)
-        if self._teleop_thread:
-            self._teleop_thread.set_mode(mode)
-        self._log(f"Turn mode → {mode}")
-
-    def _on_mode_changed(self, mode: str):
-        """Controller A/Y button changed mode — update GUI to match."""
-        self._set_turn_mode(mode)
-
     # ── Arc ratio ─────────────────────────────────────────────────────────
     def _arc_ratio_changed(self, val: int):
-        if val <= 10:      desc = "near-pivot"
+        if val <= 10:      desc = "tight arc"
         elif val >= 90:    desc = "near-straight"
         elif val < 40:     desc = "tight arc"
         elif val > 60:     desc = "wide arc"

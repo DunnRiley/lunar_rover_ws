@@ -5,7 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 138
+    Tree Height: 300
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
@@ -58,18 +58,6 @@ Visualization Manager:
       Show Arrows: true
       Show Axes: true
       Show Names: true
-      Tree:
-        base_link:
-          camera_link:
-            camera_color_frame:
-              camera_color_optical_frame:
-                {}
-            camera_depth_frame:
-              {}
-            camera_depth_optical_frame:
-              {}
-          camera_rear_link:
-            {}
       Update Interval: 0
       Value: true
     - Class: rviz_default_plugins/Image
@@ -84,7 +72,8 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/color/stream/compressed
+        Value: /camera/color/stream
+      Transport Hint: compressed
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
@@ -98,7 +87,8 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/depth/stream/compressed
+        Value: /camera/depth/stream
+      Transport Hint: compressed
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
@@ -112,7 +102,8 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera_rear/stream/compressed
+        Value: /camera_rear/stream
+      Transport Hint: compressed
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
@@ -214,14 +205,13 @@ Window Geometry:
     collapsed: false
   Front Depth:
     collapsed: false
-  Height: 1030
+  Height: 900
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd00000001000000000000030f00000366fc0200000005fb000000160052006500610072002000530074006500720065006f0100000070000000280000002800fffffffb0000001600460072006f006e007400200044006500700074006801000000a4000000280000002800fffffffb0000002600460072006f006e0074002000430061006d006500720061002000280044003400330035002901000000d8000000280000002800fffffffb000000100044006900730070006c006100790073010000010c000001860000018600fffffffb0000000a00560069006500770073010000029e000001380000013800ffffff000003250000036600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Rear Stereo:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1600
-  X: 658
-  Y: 522
+  Width: 1400
+  X: 50
+  Y: 50

@@ -98,13 +98,13 @@
 		{
 			"backtrace" : 9,
 			"isGenerated" : true,
-			"path" : "/home/cheese/lunar_rover_ws/build/lunar_robot_description/CMakeFiles/lunar_robot_description_uninstall",
+			"path" : "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/CMakeFiles/lunar_robot_description_uninstall",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 0,
 			"isGenerated" : true,
-			"path" : "/home/cheese/lunar_rover_ws/build/lunar_robot_description/CMakeFiles/lunar_robot_description_uninstall.rule",
+			"path" : "/home/rileydunn/lunar_rover_ws/build/lunar_robot_description/CMakeFiles/lunar_robot_description_uninstall.rule",
 			"sourceGroupIndex" : 1
 		}
 	],

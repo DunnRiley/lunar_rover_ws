@@ -1,0 +1,31 @@
+[0.329s] Invoking command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/rileydunn/lunar_rover_ws/build/lunar_robot_description -- -j16 -l16
+[0.383s] -- Found ament_cmake: 2.5.4 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[0.792s] -- Found ament_lint_auto: 0.17.4 (/opt/ros/jazzy/share/ament_lint_auto/cmake)
+[0.997s] -- Configuring done (0.6s)
+[1.002s] -- Generating done (0.0s)
+[1.005s] -- Build files have been written to: /home/rileydunn/lunar_rover_ws/build/lunar_robot_description
+[1.052s] Invoked command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/rileydunn/lunar_rover_ws/build/lunar_robot_description -- -j16 -l16
+[1.078s] Invoking command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/rileydunn/lunar_rover_ws/build/lunar_robot_description
+[1.094s] -- Install configuration: ""
+[1.094s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/urdf
+[1.094s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/urdf/sensors
+[1.094s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/urdf/minimal_robot.urdf
+[1.094s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/config
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/config/complete_navigation.rviz
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/config/real_hardware_navigation.rviz
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/ament_index/resource_index/package_run_dependencies/lunar_robot_description
+[1.095s] -- Installing: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/ament_index/resource_index/parent_prefix_path/lunar_robot_description
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/environment/ament_prefix_path.sh
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/environment/ament_prefix_path.dsv
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/environment/path.sh
+[1.095s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/environment/path.dsv
+[1.096s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/local_setup.bash
+[1.096s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/local_setup.sh
+[1.096s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/local_setup.zsh
+[1.097s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/local_setup.dsv
+[1.097s] -- Installing: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.dsv
+[1.097s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/ament_index/resource_index/packages/lunar_robot_description
+[1.098s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/cmake/lunar_robot_descriptionConfig.cmake
+[1.098s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/cmake/lunar_robot_descriptionConfig-version.cmake
+[1.099s] -- Up-to-date: /home/rileydunn/lunar_rover_ws/install/lunar_robot_description/share/lunar_robot_description/package.xml
+[1.099s] Invoked command in '/home/rileydunn/lunar_rover_ws/build/lunar_robot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/rileydunn/lunar_rover_ws/install/lunar_robot_hardware:/home/rileydunn/lunar_rover_ws/install/lunar_robot_autonomous:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/rileydunn/lunar_rover_ws/build/lunar_robot_description
