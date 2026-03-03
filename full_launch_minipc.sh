@@ -233,14 +233,9 @@ else
     fi
 fi
 echo ""
-
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════
 # 4 · REAR STEREO CAMERA
-#
-# The stereo camera USB port changes because Linux V4L2 assigns /dev/videoN
-# by plug-in order. Fix: install the udev rule from fix_stereo_udev.sh once
-# to get a stable /dev/video_stereo symlink. Until then, auto-scan is used.
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════
 log "[4/5] Rear stereo camera..."
 
 STEREO_SCRIPT=""
@@ -253,47 +248,55 @@ done
 if [ -z "$STEREO_SCRIPT" ]; then
     warn "stereo_camera_publisher.py not found — rear camera disabled"
 else
-    # Prefer the stable udev symlink; fall back to auto-scan (device=/dev/video6)
-    STEREO_DEV="/dev/video_stereo"
-    [ ! -e "$STEREO_DEV" ] && STEREO_DEV="/dev/video6" && \
-        warn "No /dev/video_stereo udev symlink — using $STEREO_DEV (may change!)"
-    [ ! -e "$STEREO_DEV" ] && STEREO_DEV="/dev/video0" && \
-        warn "  Falling back to /dev/video0"
-
+    # Publisher handles device detection internally now
     python3 "$STEREO_SCRIPT" \
         --ros-args \
-        -p device:="$STEREO_DEV" \
-        -p width:=960 \
-        -p height:=240 \
+        -p device:=/dev/video_stereo \
+        -p width:=1600 \
+        -p height:=600 \
         -p fps:=15 \
-        -p publish_rate:=15.0 \
-        -p jpeg_quality:=60 > /tmp/rover_stereo.log 2>&1 &
-    STEREO_PID=$!
+        -p publish_rate:=10.0 > /tmp/rover_stereo.log 2>&1 &
+
     sleep 3
 
-    if kill -0 $STEREO_PID 2>/dev/null; then
-        ok "Stereo (PID $STEREO_PID, dev=$STEREO_DEV)"
+    # Verify it's actually producing frames before starting combiner
+    STEREO_OK=false
+    for i in 1 2 3; do
+        COUNT=$(ros2 topic hz /camera_rear/left/image_raw \
+            --spin-time 2 2>/dev/null | grep "average rate" | wc -l)
+        [ "$COUNT" -gt 0 ] && STEREO_OK=true && break
+        sleep 1
+    done
 
-        # Stream the combined view
-        python3 "$HOME/lunar_rover_ws/optimized_image_pipeline.py" \
+    if [ "$STEREO_OK" = "false" ]; then
+        warn "Stereo camera not producing frames — check /tmp/rover_stereo.log"
+    else
+        ok "Stereo camera publishing"
+
+        python3 ~/lunar_rover_ws/stereo_combiner.py \
+            --ros-args \
+            -p left_crop_start:=0 \
+            -p left_crop_width:=800 \
+            -p right_crop_start:=800 \
+            -p right_crop_width:=800 \
+            -p publish_compressed:=true > /tmp/rover_combiner.log 2>&1 &
+
+        sleep 2
+
+        python3 ~/lunar_rover_ws/optimized_image_pipeline.py \
             --ros-args \
             -p input_topic:=/camera_rear/stereo_combined/compressed \
             -p output_topic:=/camera_rear/stream/compressed \
             -p input_is_compressed:=true \
-            -p input_reliable:=false \
-            -p jpeg_quality:=30 \
-            -p decimation:=3 \
-            -p buffer_delay_sec:="${DELAY_SEC}" \
-            -p target_fps:=6.0 > /tmp/rover_pipe_rear.log 2>&1 &
-        sleep 1
-        ok "Rear stream → /camera_rear/stream/compressed @ 6fps"
-    else
-        warn "Stereo didn't start on $STEREO_DEV"
-        warn "  Run: python3 $STEREO_SCRIPT  (it will auto-scan all /dev/videoN)"
-        warn "  Log: tail /tmp/rover_stereo.log"
+            -p jpeg_quality:=40 \
+            -p decimation:=1 \
+            -p buffer_delay_sec:=0.0 \
+            -p target_fps:=10.0 > /tmp/rover_pipe_rear.log 2>&1 &
+
+        sleep 2
+        ok "Rear stereo pipeline running  →  /camera_rear/stream/compressed @ 10fps"
     fi
 fi
-echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 5 · JOY → ARDUINO

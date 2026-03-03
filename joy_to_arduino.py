@@ -1,174 +1,165 @@
 #!/usr/bin/env python3
 """
-joy_to_arduino.py  —  VERSION 4  (arc only, no pivot)
+joy_to_arduino.py  —  runs on the MINI PC
 
-HOW TO CONFIRM THIS IS RUNNING:
-  Terminal will show:  === JOY_TO_ARDUINO VERSION 4 LOADED ===
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TANK DRIVE LAYOUT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-HOW TO DEPLOY:
-  cp joy_to_arduino.py ~/lunar_rover_ws/joy_to_arduino.py
-  pkill -f joy_to_arduino
-  cd ~/lunar_rover_ws && python3 joy_to_arduino.py
+  Left  stick Y  (axis 1)  ──  LEFT  wheels forward / backward
+  Right stick Y  (axis 4)  ──  RIGHT wheels forward / backward
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  CONTROLS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  All X axes are completely ignored.
 
-  Right stick Y  ── DRIVE forward / backward
-                    (right stick X is completely ignored)
+  Push both sticks forward  → drive straight forward
+  Push both sticks backward → drive straight backward
+  Push left forward + right backward → spin left
+  Push left backward + right forward → spin right
+  Unequal forward inputs → gentle arc
 
-  Left  stick X  ── TURN left / right
-                    (left  stick Y is completely ignored)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SPEED CONTROL  (independent per side)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Arc ratio slider (GUI, 0-100):
-    0   = inner wheel STOPS, outer drives around it
-    50  = inner at 50% of outer speed
-    100 = inner = outer speed (drives straight)
+  Y  (btn 3)  →  RIGHT speed UP   (+5% per press)
+  A  (btn 0)  →  RIGHT speed DOWN (-5% per press)
+  X  (btn 2)  →  LEFT  speed UP   (+5% per press)
+  B  (btn 1)  →  LEFT  speed DOWN (-5% per press)
 
-  Both wheels ALWAYS go the same direction.
-  NO counter-rotation. NO pivot mode.
+  Both sides start at SPEED_START (0.50).
+  Adjust independently to compensate for motor imbalance.
 
-  X  (btn 2)  ── Speed UP   (+5%)
-  B  (btn 1)  ── Speed DOWN (-5%)
-  LB (btn 4)  ── Actuator EXTEND  (hold)
-  RB (btn 5)  ── Actuator RETRACT (hold)
-  Start (btn 7) ─ Emergency stop toggle
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SERVO CONTROL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  IF AXES ARE WRONG
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ros2 topic echo /joy
-  Push Right stick UP    -> note axis index -> set AXIS_DRIVE
-  Push Left  stick RIGHT -> note axis index -> set AXIS_TURN
-  Standard Xbox USB: axis 0=Left X, 1=Left Y, 3=Right X, 4=Right Y
+  D-pad UP    →  Servo to  90° (centre / neutral)
+  D-pad LEFT  →  Servo to   0° (full left)
+  D-pad RIGHT →  Servo to 180° (full right)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  IF ROVER SPINS INSTEAD OF GOING STRAIGHT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Toggle RIGHT_FLIP (True <-> False)
+  Protocol: send_packet(ser, SERVO=0x11, angle, 0x01)
+  The "speed" byte is re-used as the angle (0–180).
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACTUATORS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  LB (btn 4)    →  Actuator EXTEND  (hold)
+  RB (btn 5)    →  Actuator RETRACT (hold)
+  Start (btn 7) →  Emergency stop toggle
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  VERIFY YOUR AXIS NUMBERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Run:  ros2 topic echo /joy
+  Push Left  stick UP  → note which axis changes → set AXIS_LEFT
+  Push Right stick UP  → note which axis changes → set AXIS_RIGHT
+
+  Standard Xbox USB on Linux:
+    Axis 0 = Left  X,  Axis 1 = Left  Y
+    Axis 3 = Right X,  Axis 4 = Right Y
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RIGHT SIDE MOTOR IS MIRRORED?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  RIGHT_FLIP = True means direction byte is inverted for right side.
+  If rover spins instead of going straight when pushing both sticks
+  forward equally: toggle RIGHT_FLIP.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PERMANENT SERIAL PERMISSION FIX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  sudo usermod -aG dialout $USER   then log out and back in.
+  (sudo chmod 666 /dev/ttyACM0 works but resets every reboot)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   SERIAL PROTOCOL  [0xAA][Device][Speed][Direction][0x55]
-    0x05  LEFT  side  (FL + BL)
-    0x06  RIGHT side  (FR + BR)
+    0x05  LEFT  side (FL + BL)
+    0x06  RIGHT side (FR + BR)
     0x08  Both actuators
+    0x11  Servo  (Speed byte = angle 0–180, Direction = 0x01)
     0xFF  STOP ALL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  PERMANENT SERIAL PERMISSION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  sudo usermod -aG dialout $USER   then log out and back in
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
-from std_msgs.msg import Int8 as RosInt8
 import serial
 import time
 import threading
 import glob
 
-VERSION = 4
-
-# ── Serial protocol bytes ─────────────────────────────────────────
+# ── Serial protocol ───────────────────────────────────────────────────────
 START     = 0xAA
 END       = 0x55
 DEV_LEFT  = 0x05
 DEV_RIGHT = 0x06
 DEV_ACT   = 0x08
+DEV_SERVO = 0x11
 DEV_KILL  = 0xFF
 
-# ═════════════════════════════════════════════════════════════════
-#  AXIS / BUTTON MAPPING
-# ═════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
+#  CONTROLLER MAPPING
+#  Update these if ros2 topic echo /joy shows different axis numbers.
+# ═════════════════════════════════════════════════════════════════════════
 
-AXIS_DRIVE = 4    # Right stick Y   — right stick X (axis 3) IGNORED
-AXIS_TURN  = 0    # Left  stick X   — left  stick Y (axis 1) IGNORED
+# Tank drive: one stick per side, Y axis only
+AXIS_LEFT  = 1    # Left  stick Y  ─ controls LEFT  wheels
+AXIS_RIGHT = 4    # Right stick Y  ─ controls RIGHT wheels
 
-BTN_B     = 1     # Speed DOWN
-BTN_X     = 2     # Speed UP
+# Speed control (independent per side)
+BTN_RIGHT_UP   = 3   # Y  — right speed UP
+BTN_RIGHT_DOWN = 0   # A  — right speed DOWN
+BTN_LEFT_UP    = 2   # X  — left  speed UP
+BTN_LEFT_DOWN  = 1   # B  — left  speed DOWN
+
+# Actuators
 BTN_LB    = 4     # Actuator EXTEND  (hold)
 BTN_RB    = 5     # Actuator RETRACT (hold)
-BTN_START = 7     # Emergency stop
 
-# ═════════════════════════════════════════════════════════════════
-#  MOTOR DIRECTION
-# ═════════════════════════════════════════════════════════════════
+# Emergency stop
+BTN_START = 7
 
-RIGHT_FLIP = True   # Right motors physically mirrored on this rover.
-                    # Toggle if rover spins fwd instead of going straight.
+# D-pad axes (standard Xbox on Linux: axis 6 = left/right, axis 7 = up/down)
+# Values: +1 or -1 when pressed, 0 when released.
+DPAD_AXIS_LR = 6   # -1 = left pressed,  +1 = right pressed
+DPAD_AXIS_UD = 7   # +1 = up pressed,    -1 = down pressed
 
-# ═════════════════════════════════════════════════════════════════
+# Servo angles for each D-pad direction
+SERVO_UP    = 90    # D-pad UP    → centre
+SERVO_LEFT  =  0    # D-pad LEFT  → full left
+SERVO_RIGHT = 180   # D-pad RIGHT → full right
+
+# ═════════════════════════════════════════════════════════════════════════
+#  MOTOR DIRECTION — right side is physically mirrored on this rover
+# ═════════════════════════════════════════════════════════════════════════
+
+RIGHT_FLIP = True   # Inverts direction byte for right-side packets.
+                    # Toggle if rover spins instead of driving straight
+                    # when both sticks are pushed equally forward.
+
+# ═════════════════════════════════════════════════════════════════════════
 #  TUNING
-# ═════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
 
-DEADZONE    = 0.10
-MAX_MOTOR   = 200
-MAX_HZ      = 20
-MIN_GAP     = 1.0 / MAX_HZ
-SPEED_START = 0.50
-SPEED_STEP  = 0.05
-JOY_TIMEOUT = 0.5
-ARC_DEFAULT = 50
+DEADZONE        = 0.10   # Stick input below this is treated as zero
+MAX_MOTOR       = 200    # Max PWM value sent to Arduino (0–255)
+MAX_SERIAL_HZ   = 20     # Max serial packets per second
+MIN_SERIAL_GAP  = 1.0 / MAX_SERIAL_HZ
 
-
-# ═════════════════════════════════════════════════════════════════
-#  ARC DRIVE MATH
-#
-#  Both wheels ALWAYS go the same direction (both fwd or both back).
-#
-#  Outer wheel = full drive speed.
-#  Inner wheel = (ratio/100) * outer, scaled by turn magnitude.
-#
-#  ratio=0   inner stops completely at full turn input
-#  ratio=50  inner runs at 50% of outer at full turn input
-#  ratio=100 inner equals outer (straight line)
-#
-#  At partial turn inputs the inner reduction blends proportionally,
-#  so gentle stick = gentle curve, full stick = maximum arc.
-# ═════════════════════════════════════════════════════════════════
-
-def compute_arc(fwd: float, turn: float, ratio: int, speed: float):
-    """
-    Returns (left_f, right_f) each in [-1.0, 1.0].
-    Both values always have the same sign (or one is zero).
-    Positive = forward, negative = backward.
-    """
-    if abs(fwd) < 0.001 and abs(turn) < 0.001:
-        return 0.0, 0.0
-
-    inner_fraction = ratio / 100.0
-    blend          = abs(turn)   # 0.0 = straight,  1.0 = full turn
-
-    if abs(fwd) < 0.001:
-        # No forward input — use turn as the drive signal.
-        # Both sides go "forward" relative to the turn direction.
-        # Outer side at full turn speed, inner at ratio%.
-        outer = abs(turn) * speed
-        inner = outer * inner_fraction
-        if turn > 0:        # right: left=outer, right=inner
-            return outer, inner
-        else:               # left:  left=inner, right=outer
-            return inner, outer
-
-    # Has forward/backward input.
-    # outer stays at fwd*speed regardless of turn.
-    # inner scales from fwd*speed (at blend=0) down to fwd*speed*inner_fraction (at blend=1).
-    outer        = fwd * speed
-    actual_inner = fwd * speed * (1.0 - blend * (1.0 - inner_fraction))
-
-    if turn > 0:            # right: left=outer, right=inner
-        return outer, actual_inner
-    elif turn < 0:          # left:  left=inner, right=outer
-        return actual_inner, outer
-    else:
-        return outer, outer # straight
+SPEED_START     = 0.50   # Starting speed multiplier for BOTH sides (0.05–1.0)
+SPEED_STEP      = 0.05
+JOY_TIMEOUT     = 0.5    # Seconds without /joy before motors stop
 
 
-# ═════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
 #  ROS NODE
-# ═════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
 
 class JoyToArduino(Node):
 
@@ -180,82 +171,101 @@ class JoyToArduino(Node):
         self._port  = port
         self._connect(port)
 
-        self._speed     = SPEED_START
-        self._ratio     = ARC_DEFAULT
-        self._estop     = False
-        self._last_joy  = self.get_clock().now()
-        self._prev_btns = {}
-        self._joy_count = 0
+        # Independent speed multipliers for each side
+        self._speed_left  = SPEED_START
+        self._speed_right = SPEED_START
 
+        self._emergency  = False
+        self._last_joy   = self.get_clock().now()
+        self._prev_btns  = {}
+        self._joy_count  = 0
+
+        # D-pad edge detection (axes, not buttons on most Xbox pads)
+        self._prev_dpad_lr = 0.0
+        self._prev_dpad_ud = 0.0
+
+        # Change detection — skip redundant serial writes
         self._last_left  = (0, 0)
         self._last_right = (0, 0)
         self._last_act   = (0, 0)
         self._last_write = 0.0
 
-        self.create_subscription(Joy,     '/joy',            self._joy_cb,   10)
-        self.create_subscription(Bool,    '/emergency_stop', self._estop_cb, 10)
-        self.create_subscription(RosInt8, '/arc_ratio',      self._ratio_cb, 10)
+        self.create_subscription(Joy,  '/joy',            self._joy_cb,   10)
+        self.create_subscription(Bool, '/emergency_stop', self._estop_cb, 10)
         self.create_timer(0.1, self._watchdog)
         self.create_timer(5.0, self._diagnostics)
 
-        print('')
-        print('=' * 62)
-        print(f'  === JOY_TO_ARDUINO VERSION {VERSION} LOADED ===')
-        print(f'  MODE   : ARC ONLY (no pivot)')
-        print(f'  DRIVE  : axis {AXIS_DRIVE} (Right stick Y  —  X ignored)')
-        print(f'  TURN   : axis {AXIS_TURN} (Left  stick X  —  Y ignored)')
-        print(f'  RATIO  : {self._ratio} (0=inner stops, 100=straight)')
-        print(f'           Change via GUI /arc_ratio slider')
-        print(f'  SPEED  : {self._speed:.2f}  (X btn=up, B btn=down)')
-        print(f'  RIGHT_FLIP={RIGHT_FLIP}  MAX_MOTOR={MAX_MOTOR}')
-        print(f'  Serial : {port}  open={self._ser is not None}')
-        print('  Move sticks to see live output below.')
-        print('=' * 62)
-        print('')
+        self._banner()
 
-    # ── Serial ────────────────────────────────────────────────────
+    # ── Banner ────────────────────────────────────────────────────────────
+
+    def _banner(self):
+        L = self.get_logger().info
+        L('=' * 62)
+        L('  joy_to_arduino  |  TANK DRIVE  |  miniPC serial bridge')
+        L(f'  Port      : {self._port}  connected={self._ser is not None}')
+        L(f'  LEFT  side: axis {AXIS_LEFT} (Left  stick Y only)')
+        L(f'  RIGHT side: axis {AXIS_RIGHT} (Right stick Y only)')
+        L(f'  Speed ctrl: Y/A=right up/down  X/B=left up/down')
+        L(f'  Servo     : D-pad UP=90° LEFT=0° RIGHT=180°')
+        L(f'  Actuators : LB=extend  RB=retract  Start=e-stop')
+        L(f'  RIGHT_FLIP={RIGHT_FLIP}')
+        L(f'  speed_left={self._speed_left:.2f}  speed_right={self._speed_right:.2f}')
+        L('=' * 62)
+
+    # ── Serial ────────────────────────────────────────────────────────────
 
     def _connect(self, port: str):
         try:
             self._ser = serial.Serial(port, 115200, timeout=1.0)
             time.sleep(2.0)
             self._ser.reset_input_buffer()
-            self.get_logger().info(f'Arduino connected: {port}')
+            self.get_logger().info(f'✓ Arduino connected: {port}')
         except serial.SerialException as e:
-            self.get_logger().error(f'Serial failed: {e}')
-            self.get_logger().error('Fix: sudo usermod -aG dialout $USER (log out/in)')
+            self.get_logger().error(f'✗ Serial open failed: {e}')
+            self.get_logger().error(
+                '  Permanent fix: sudo usermod -aG dialout $USER  (log out/in)')
             self._ser = None
 
     def _send(self, device: int, speed: int, direction: int):
+        """Send one 5-byte packet. Must be called with self._lock held."""
         if self._ser and self._ser.is_open:
             try:
                 self._ser.write(bytes([START, device,
                                        speed & 0xFF, direction & 0xFF, END]))
             except serial.SerialException as e:
-                self.get_logger().error(f'Serial write: {e}')
+                self.get_logger().error(f'Serial write error: {e}')
                 self._ser = None
 
     def _stop_all(self):
         with self._lock:
             self._send(DEV_KILL, 0, 0)
-        self._last_left = self._last_right = self._last_act = (0, 0)
+        self._last_left  = (0, 0)
+        self._last_right = (0, 0)
+        self._last_act   = (0, 0)
 
-    # ── Motor output ──────────────────────────────────────────────
+    # ── Motor helpers ─────────────────────────────────────────────────────
 
     def _to_sd(self, v: float, flip: bool = False):
+        """Convert float [-1, 1] → (speed_byte, direction_byte)."""
         spd = min(int(abs(v) * MAX_MOTOR), 255)
         d   = 0 if v >= 0 else 1
         if flip:
             d = 1 - d
         return (spd, d)
 
-    def _set_drive(self, lf: float, rf: float):
-        l = self._to_sd(lf, flip=False)
-        r = self._to_sd(rf, flip=RIGHT_FLIP)
+    def _set_drive(self, left_f: float, right_f: float):
+        """
+        Send drive packets for left and right sides independently.
+        left_f / right_f are raw stick values [-1, 1] AFTER deadzone.
+        Each side's own speed multiplier is already applied by the caller.
+        """
+        l = self._to_sd(left_f,  flip=False)
+        r = self._to_sd(right_f, flip=RIGHT_FLIP)
 
         now     = time.monotonic()
         changed = (l != self._last_left or r != self._last_right)
-        rate_ok = (now - self._last_write) >= MIN_GAP
+        rate_ok = (now - self._last_write) >= MIN_SERIAL_GAP
 
         if changed and rate_ok:
             with self._lock:
@@ -264,8 +274,6 @@ class JoyToArduino(Node):
             self._last_left  = l
             self._last_right = r
             self._last_write = now
-            print(f'[DRIVE] ratio={self._ratio:3d} speed={self._speed:.2f} | '
-                  f'LEFT spd={l[0]:3d} dir={l[1]} | RIGHT spd={r[0]:3d} dir={r[1]}')
 
     def _set_actuator(self, val: int):
         sd = (MAX_MOTOR, 0) if val > 0 else \
@@ -274,19 +282,26 @@ class JoyToArduino(Node):
             with self._lock:
                 self._send(DEV_ACT, sd[0], sd[1])
             self._last_act = sd
-            print(f'[ACT]  val={val}  spd={sd[0]} dir={sd[1]}')
+
+    def _set_servo(self, angle: int):
+        """Send servo position command. Angle 0–180 goes in the speed byte."""
+        angle = max(0, min(180, angle))
+        with self._lock:
+            self._send(DEV_SERVO, angle, 0x01)
+        self.get_logger().info(f'Servo → {angle}°')
 
     def _stop_drive(self):
         if self._last_left != (0, 0) or self._last_right != (0, 0):
             with self._lock:
                 self._send(DEV_LEFT,  0, 0)
                 self._send(DEV_RIGHT, 0, 0)
-            self._last_left = self._last_right = (0, 0)
-            print('[STOP]')
+            self._last_left  = (0, 0)
+            self._last_right = (0, 0)
 
-    # ── Helpers ───────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────
 
     def _rising(self, idx: int, cur: int) -> bool:
+        """Edge detector for buttons."""
         prev = self._prev_btns.get(idx, 0)
         self._prev_btns[idx] = cur
         return cur == 1 and prev == 0
@@ -294,39 +309,53 @@ class JoyToArduino(Node):
     def _dz(self, v: float) -> float:
         return v if abs(v) >= DEADZONE else 0.0
 
-    # ── /joy callback ─────────────────────────────────────────────
+    # ── /joy callback ─────────────────────────────────────────────────────
 
     def _joy_cb(self, msg: Joy):
         self._last_joy   = self.get_clock().now()
         self._joy_count += 1
 
-        ax  = lambda i: msg.axes[i]    if i < len(msg.axes)    else 0.0
-        btn = lambda i: msg.buttons[i] if i < len(msg.buttons) else 0
+        def ax(i):  return msg.axes[i]    if i < len(msg.axes)    else 0.0
+        def btn(i): return msg.buttons[i] if i < len(msg.buttons) else 0
 
-        # Emergency stop
+        # ── Emergency stop ────────────────────────────────────────────────
         if self._rising(BTN_START, btn(BTN_START)):
-            self._estop = not self._estop
-            if self._estop:
+            self._emergency = not self._emergency
+            if self._emergency:
                 self._stop_all()
-                print('[ESTOP] ACTIVATED')
+                self.get_logger().warn('⬛ EMERGENCY STOP')
             else:
-                print('[ESTOP] cleared — ready')
+                self.get_logger().info('✓ E-stop cleared — ready')
 
-        if self._estop:
-            for b in (BTN_B, BTN_X, BTN_LB, BTN_RB):
+        if self._emergency:
+            # Still update button state so edges work after e-stop clears
+            for b in (BTN_RIGHT_UP, BTN_RIGHT_DOWN,
+                      BTN_LEFT_UP,  BTN_LEFT_DOWN,
+                      BTN_LB, BTN_RB):
                 self._prev_btns[b] = btn(b)
+            # Update d-pad state too
+            self._prev_dpad_lr = ax(DPAD_AXIS_LR)
+            self._prev_dpad_ud = ax(DPAD_AXIS_UD)
             return
 
-        # Speed
-        if self._rising(BTN_X, btn(BTN_X)):
-            self._speed = round(min(1.0, self._speed + SPEED_STEP), 2)
-            print(f'[SPEED] {self._speed:.2f}')
+        # ── Per-side speed control ────────────────────────────────────────
+        if self._rising(BTN_RIGHT_UP, btn(BTN_RIGHT_UP)):
+            self._speed_right = round(min(1.0, self._speed_right + SPEED_STEP), 2)
+            self.get_logger().info(f'RIGHT speed: {self._speed_right:.2f}')
 
-        if self._rising(BTN_B, btn(BTN_B)):
-            self._speed = round(max(0.05, self._speed - SPEED_STEP), 2)
-            print(f'[SPEED] {self._speed:.2f}')
+        if self._rising(BTN_RIGHT_DOWN, btn(BTN_RIGHT_DOWN)):
+            self._speed_right = round(max(0.05, self._speed_right - SPEED_STEP), 2)
+            self.get_logger().info(f'RIGHT speed: {self._speed_right:.2f}')
 
-        # Actuators (hold)
+        if self._rising(BTN_LEFT_UP, btn(BTN_LEFT_UP)):
+            self._speed_left = round(min(1.0, self._speed_left + SPEED_STEP), 2)
+            self.get_logger().info(f'LEFT  speed: {self._speed_left:.2f}')
+
+        if self._rising(BTN_LEFT_DOWN, btn(BTN_LEFT_DOWN)):
+            self._speed_left = round(max(0.05, self._speed_left - SPEED_STEP), 2)
+            self.get_logger().info(f'LEFT  speed: {self._speed_left:.2f}')
+
+        # ── Actuators (hold) ──────────────────────────────────────────────
         if btn(BTN_LB):
             self._set_actuator(1)
         elif btn(BTN_RB):
@@ -334,60 +363,91 @@ class JoyToArduino(Node):
         else:
             self._set_actuator(0)
 
-        # Drive — ONLY these two axes, all others ignored
-        fwd  = self._dz(ax(AXIS_DRIVE))   # Right stick Y only
-        turn = self._dz(ax(AXIS_TURN))    # Left  stick X only
+        # ── D-pad servo control (rising-edge on axes) ─────────────────────
+        cur_lr = ax(DPAD_AXIS_LR)
+        cur_ud = ax(DPAD_AXIS_UD)
 
-        if abs(fwd) < 0.001 and abs(turn) < 0.001:
+        # D-pad UP (axis 7 goes to +1 when pressed on Xbox pads)
+        if cur_ud > 0.5 and self._prev_dpad_ud <= 0.5:
+            self._set_servo(SERVO_UP)
+
+        # D-pad LEFT (axis 6 goes to -1 when pressed)
+        if cur_lr < -0.5 and self._prev_dpad_lr >= -0.5:
+            self._set_servo(SERVO_LEFT)
+
+        # D-pad RIGHT (axis 6 goes to +1 when pressed)
+        if cur_lr > 0.5 and self._prev_dpad_lr <= 0.5:
+            self._set_servo(SERVO_RIGHT)
+
+        self._prev_dpad_lr = cur_lr
+        self._prev_dpad_ud = cur_ud
+
+        # ── Tank drive ────────────────────────────────────────────────────
+        # Each side reads ONLY its own Y axis.  X axes are completely ignored.
+        raw_left  = self._dz(ax(AXIS_LEFT))
+        raw_right = self._dz(ax(AXIS_RIGHT))
+
+        if abs(raw_left) < 0.001 and abs(raw_right) < 0.001:
             self._stop_drive()
             return
 
-        lf, rf = compute_arc(fwd, turn, self._ratio, self._speed)
-        self._set_drive(lf, rf)
+        # Apply independent speed multipliers
+        left_f  = raw_left  * self._speed_left
+        right_f = raw_right * self._speed_right
 
-    # ── /arc_ratio topic (from GUI slider) ────────────────────────
+        self._set_drive(left_f, right_f)
 
-    def _ratio_cb(self, msg: RosInt8):
-        old = self._ratio
-        self._ratio = max(0, min(100, int(msg.data)))
-        if self._ratio != old:
-            print(f'[RATIO] {old} -> {self._ratio}')
-
-    # ── Watchdog ──────────────────────────────────────────────────
+    # ── Watchdog ──────────────────────────────────────────────────────────
 
     def _watchdog(self):
+        # Attempt serial reconnect if dropped
         if self._ser is None or not self._ser.is_open:
             ports = glob.glob('/dev/ttyACM*') + glob.glob('/dev/ttyUSB*')
             if ports:
-                self.get_logger().warn(f'Reconnecting: {ports[0]}')
+                self.get_logger().warn(f'Reconnecting serial: {ports[0]}')
                 self._connect(ports[0])
             return
-        if self._estop:
+
+        if self._emergency:
             return
+
         elapsed = (self.get_clock().now() - self._last_joy).nanoseconds / 1e9
         if elapsed > JOY_TIMEOUT:
             self._stop_drive()
+            self.get_logger().warn('Controller lost — motors stopped',
+                                   throttle_duration_sec=2.0)
 
-    # ── Diagnostics every 5 s ─────────────────────────────────────
+    # ── Diagnostics every 5 s ─────────────────────────────────────────────
 
     def _diagnostics(self):
         serial_ok = self._ser is not None and self._ser.is_open
         elapsed   = (self.get_clock().now() - self._last_joy).nanoseconds / 1e9
-        print(f'\n[DIAG] serial={serial_ok}  joy={self._joy_count}/5s  '
-              f'last={elapsed:.1f}s  ratio={self._ratio}  '
-              f'speed={self._speed:.2f}  estop={self._estop}')
+        self.get_logger().info(
+            f'[diag] serial={serial_ok}  '
+            f'joy={self._joy_count}/5s  '
+            f'last_joy={elapsed:.1f}s ago  '
+            f'spd_L={self._speed_left:.2f}  '
+            f'spd_R={self._speed_right:.2f}  '
+            f'estop={self._emergency}'
+        )
         if self._joy_count == 0:
-            print('[DIAG] WARNING: no /joy messages — check ROS_DOMAIN_ID=42')
+            self.get_logger().warn(
+                '⚠ No /joy messages received — '
+                'is joy_node running on laptop? ROS_DOMAIN_ID=42?')
         self._joy_count = 0
+
+    # ── Emergency stop topic ──────────────────────────────────────────────
 
     def _estop_cb(self, msg: Bool):
         if msg.data:
-            self._estop = True
+            self._emergency = True
             self._stop_all()
-            print('[ESTOP] from topic')
+            self.get_logger().error('⬛ EMERGENCY STOP (topic)')
         else:
-            self._estop = False
-            print('[ESTOP] cleared from topic')
+            self._emergency = False
+            self.get_logger().info('✓ E-stop cleared (topic)')
+
+    # ── Cleanup ───────────────────────────────────────────────────────────
 
     def destroy_node(self):
         self._stop_all()
@@ -396,22 +456,25 @@ class JoyToArduino(Node):
         super().destroy_node()
 
 
-# ═════════════════════════════════════════════════════════════════
-#  MAIN
-# ═════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
+#  ENTRY POINT
+# ═════════════════════════════════════════════════════════════════════════
 
 def main(args=None):
     rclpy.init(args=args)
 
     ports = glob.glob('/dev/ttyACM*') + glob.glob('/dev/ttyUSB*')
     if not ports:
-        print('ERROR: No Arduino at /dev/ttyACM* or /dev/ttyUSB*')
-        print('Fix: sudo usermod -aG dialout $USER  then log out/in')
+        print('ERROR: No Arduino found at /dev/ttyACM* or /dev/ttyUSB*')
+        print('  Permanent fix: sudo usermod -aG dialout $USER  (log out/in)')
+        print('  Temporary fix: sudo chmod 666 /dev/ttyACM0')
         rclpy.shutdown()
         return
 
-    print(f'Serial ports found: {ports}')
-    node = JoyToArduino(ports[0])
+    port = ports[0]
+    print(f'Using Arduino port: {port}')
+
+    node = JoyToArduino(port)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
