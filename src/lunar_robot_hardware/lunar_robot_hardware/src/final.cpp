@@ -18,9 +18,6 @@ int32_t gx_scale, gy_scale, gz_scale;
 
 float gx_bias = 0, gy_bias = 0, gz_bias = 0;
 
-unsigned long lastIMUms = 0;
-const unsigned long imuPeriodMs = 50;
-
 // Servo
 Servo myServo;
 
@@ -60,7 +57,6 @@ const uint8_t ENC = 0xA5;
 
 uint8_t data[3];
 uint8_t idx = 0;
-uint16_t currcount = 0;
 
 enum RxState { WAIT_START, READ_DATA, WAIT_END };
 RxState rxState = WAIT_START;
@@ -68,8 +64,8 @@ RxState rxState = WAIT_START;
 int16_t drivemin = 29325;
 int16_t drivemax = 29375;
 
-int16_t dumpmin = 32500;
-int16_t dumpmax = 32000;
+int16_t dumpmax = 32500;
+int16_t dumpmin = 32000;
 
 int16_t digmin = 28850;
 int16_t digmax = 28875;
@@ -107,7 +103,7 @@ void calibrate();
 void sendTelemetry();
 void sendENCCount();
 void sendIMUTelemetry();
-void writeUInt16LE(HardwareSerial &port, int16_t val);
+void writeUInt16LE(HardwareSerial &port, uint16_t val);
 void writeInt32LE(HardwareSerial &port, int32_t val);
 
 
@@ -197,6 +193,7 @@ void loop() {
     switch (actuatorState) {
         case CALIBRATE:
             calibrate();
+            break;
         case DRIVEPOSITION:
             drivepositionact();
         break;
@@ -373,10 +370,10 @@ void calibrate() {
     lastChangeMs = now;
 
     // start moving up (retract)
-    analogWrite(RightActuatorPWM, 255);
-    analogWrite(LeftActuatorPWM, 255);
     digitalWrite(RightActuatorDIR, 0);
     digitalWrite(LeftActuatorDIR, 0);
+    analogWrite(RightActuatorPWM, 255);
+    analogWrite(LeftActuatorPWM, 255);
     return;
   }
 
@@ -395,6 +392,7 @@ void calibrate() {
     noInterrupts();
     leftActuatorCount = 32000;   // or 0, your choice
     interrupts();
+    actuatorState = STOP;
 
     started = false; // calibration complete
   }
@@ -413,28 +411,28 @@ void drivepositionact(){
     leftCount = leftActuatorCount;
     interrupts();
     if (leftCount < drivemin - 50){
-        analogWrite(RightActuatorPWM, 255);
-        analogWrite(LeftActuatorPWM,  255);
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR,  0);
-    }
-    else if (leftCount < drivemin - 25){
-        analogWrite(RightActuatorPWM, 125);
-        analogWrite(LeftActuatorPWM, 125);
-        digitalWrite(RightActuatorDIR, 0);
-        digitalWrite(LeftActuatorDIR, 0);
-    }
-    else if (leftCount > drivemax + 50){
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
+    }
+    else if (leftCount < drivemin - 25){
+        digitalWrite(RightActuatorDIR, 0);
+        digitalWrite(LeftActuatorDIR, 0);
+        analogWrite(RightActuatorPWM, 125);
+        analogWrite(LeftActuatorPWM, 125);
+    }
+    else if (leftCount > drivemax + 50){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
+        analogWrite(RightActuatorPWM, 255);
+        analogWrite(LeftActuatorPWM,  255);
     }
     else if (leftCount > drivemax + 25){
-        analogWrite(RightActuatorPWM, 125);
-        analogWrite(LeftActuatorPWM,  125);
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
+        analogWrite(RightActuatorPWM, 125);
+        analogWrite(LeftActuatorPWM,  125);
     }
     else{
         actuatorState = STOP;
@@ -447,28 +445,28 @@ void dumppositionact(){
     leftCount = leftActuatorCount;
     interrupts();
     if (leftCount < dumpmin - 50){
-        analogWrite(RightActuatorPWM, 255);
-        analogWrite(LeftActuatorPWM,  255);
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR,  0);
-    }
-    else if (leftCount < dumpmin - 25){
-        analogWrite(RightActuatorPWM, 125);
-        analogWrite(LeftActuatorPWM, 125);
-        digitalWrite(RightActuatorDIR, 0);
-        digitalWrite(LeftActuatorDIR, 0);
-    }
-    else if (leftCount > dumpmax + 50){
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
+    }
+    else if (leftCount < dumpmin - 25){
+        digitalWrite(RightActuatorDIR, 0);
+        digitalWrite(LeftActuatorDIR, 0);
+        analogWrite(RightActuatorPWM, 125);
+        analogWrite(LeftActuatorPWM, 125);
+    }
+    else if (leftCount > dumpmax + 50){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
+        analogWrite(RightActuatorPWM, 255);
+        analogWrite(LeftActuatorPWM,  255);
     }
     else if (leftCount > dumpmax + 25){
-        analogWrite(RightActuatorPWM, 125);
-        analogWrite(LeftActuatorPWM,  125);
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
+        analogWrite(RightActuatorPWM, 125);
+        analogWrite(LeftActuatorPWM,  125);
     }
     else{
         actuatorState = STOP;
@@ -481,28 +479,28 @@ void digpositionact(){
     leftCount = leftActuatorCount;
     interrupts();
     if (leftCount < digmin - 50){
-        analogWrite(RightActuatorPWM, 255);
-        analogWrite(LeftActuatorPWM,  255);
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR,  0);
-    }
-    else if (leftCount < digmin - 25){
-        analogWrite(RightActuatorPWM, 125);
-        analogWrite(LeftActuatorPWM, 125);
-        digitalWrite(RightActuatorDIR, 0);
-        digitalWrite(LeftActuatorDIR, 0);
-    }
-    else if (leftCount > digmax + 50){
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
+    }
+    else if (leftCount < digmin - 25){
+        digitalWrite(RightActuatorDIR, 0);
+        digitalWrite(LeftActuatorDIR, 0);
+        analogWrite(RightActuatorPWM, 125);
+        analogWrite(LeftActuatorPWM, 125);
+    }
+    else if (leftCount > digmax + 50){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
+        analogWrite(RightActuatorPWM, 255);
+        analogWrite(LeftActuatorPWM,  255);
     }
     else if (leftCount > digmax + 25){
-        analogWrite(RightActuatorPWM, 125);
-        analogWrite(LeftActuatorPWM,  125);
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
+        analogWrite(RightActuatorPWM, 125);
+        analogWrite(LeftActuatorPWM,  125);
     }
     else{
         actuatorState = STOP;
@@ -532,29 +530,29 @@ void leftEncoderISR() {
 
 // ── Motor helpers ─────────────────────────────────────────────────────────
 void MotorDriving(uint8_t pwmPin, uint8_t speed, uint8_t direction, uint8_t dirPin) {
-  analogWrite(pwmPin, speed);
   digitalWrite(dirPin, direction);
+  analogWrite(pwmPin, speed);
 }
 
 void DriveLeft(uint8_t speed, uint8_t direction) {
-  analogWrite(FrontLeftPWM, speed);
-  analogWrite(BackLeftPWM,  speed);
   digitalWrite(FrontLeftDIR, direction);
   digitalWrite(BackLeftDIR,  direction);
+  analogWrite(FrontLeftPWM, speed);
+  analogWrite(BackLeftPWM,  speed);
 }
 
 void DriveRight(uint8_t speed, uint8_t direction) {
-  analogWrite(FrontRightPWM, speed);
-  analogWrite(BackRightPWM,  speed);
   digitalWrite(FrontRightDIR, direction);
   digitalWrite(BackRightDIR,  direction);
+  analogWrite(FrontRightPWM, speed);
+  analogWrite(BackRightPWM,  speed);
 }
 
 void ActuatorMovement(uint8_t speed, uint8_t direction) {
-  analogWrite(RightActuatorPWM, speed);
-  analogWrite(LeftActuatorPWM,  speed);
   digitalWrite(RightActuatorDIR, direction);
   digitalWrite(LeftActuatorDIR,  direction);
+  analogWrite(RightActuatorPWM, speed);
+  analogWrite(LeftActuatorPWM,  speed);
 }
 
 
@@ -596,9 +594,13 @@ void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
         actuatorState = CALIBRATE;
         break;
     // Sets the Encoder Counts to be recieved values
-    case 0xCB:
-        leftActuatorCount = (speed<<8) | direction;
+    case 0xCB: {
+        uint16_t v = ((uint16_t)speed<<8) | direction;
+        noInterrupts();
+        leftActuatorCount = v;
+        interrupts();
         break;
+    }
     case 0xB4:
         STOPALL();
         break;
