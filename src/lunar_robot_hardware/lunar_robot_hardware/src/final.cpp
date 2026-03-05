@@ -638,6 +638,9 @@ void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
     case 0xFF: 
         STOPALL(); 
         break;
+    case 0xD1:
+        readMPU();
+        sendTelemetry();
     default:  
         break;
   }
