@@ -14,9 +14,30 @@ source install/setup.bash
 ## Run from mission control (laptop)
 bash full_launch_laptop.sh --start-minipc
 
+## Run On Mini PC after RViz is launched for stereo camera
+bash ~/lunar_rover_ws/restart_rear_camera.sh
+
 ## SLAM with RTAB-mapping (Not Implemented)
 python3 slam_launch.py
 bash slam_laptop.sh
+
+## Kill topics
+pkill -f joy_node
+pkill -f arduino_teleop_controller
+
+# Important dependencies
+sudo apt install ros-jazzy-nav2-bringup ros-jazzy-navigation2 ros-jazzy-nav2-route
+
+############################ Needed Dependencies for SLAM ############################
+sudo apt update
+sudo apt install -y \
+  ros-jazzy-rtabmap \
+  ros-jazzy-rtabmap-ros \
+  ros-jazzy-rtabmap-slam \
+  ros-jazzy-rtabmap-odom \
+  ros-jazzy-rtabmap-viz \
+  ros-jazzy-rtabmap-msgs \
+  ros-jazzy-rtabmap-examples
 
 ######################################### OLD #########################################
 
@@ -58,5 +79,41 @@ ros2 run lunar_robot_hardware controller_teleop
 ### Terminal 2 for point click navigation
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py
 
-# Important dependencies
-sudo apt install ros-jazzy-nav2-bringup ros-jazzy-navigation2 ros-jazzy-nav2-route
+## Commands for Arduino
+All Commands shall be sent in the Following Format 
+N/A values means it doesn’t matter. 
+
+Start | Device | Speed | Direction | END | Description
+0xAA | 0x05 | Int 0-255 | Int 0 or 1 | 0x55 | Controls left motors 
+0xAA | 0x06 | Int 0-255 | Int 0 or 1 | 0x55 | Controls right motors 
+0xAA | 0x08 | Int 0-255 | Int 0 or 1 | 0x55 | Controls Actuators 
+0xAA | 0x11 | Int 0-255 | N/A | 0x55 | Controls Servo, 90 is stop, 45 CC, 135 CW 
+0xAA | 0xA7 | N/A | N/A | 0x55 | Sets Actuator to Dig 
+0xAA | 0xA9 | N/A | N/A | 0x55 | Sets Actuator to Drive  
+0xAA | 0xB3 | N/A | N/A | 0x55 | Sets Actuator to Dump 
+0xAA | 0xCA | N/A | N/A | 0x55 | Set Motor to high level, encoder counts to 0, ( Calibrate Bucket) 
+0xAA | 0xB4 | N/A | N/A | 0x55 | Stops all moving parts 
+0xAA | 0xD1 | N/A | N/A | 0x55 | Request  IMU Data NOW 
+
+
+## Signals back from IMU/encoders
+Telemetry 
+Start: 0xAA 
+ax: 4 byte float 
+ay: 4 byte float 
+az: 4 byte float 
+gx: 4 byte float 
+gy: 4 byte float 
+gz: 4 byte float 
+ENC Start: 0xA5 
+ENC: 2 byte integer 16 bits, min 0 max 65535 
+END: 0x55 
+
+encoders are actuators only.
+a is axelaration, g is gyro.
+
+Unpack gyro/accelaration data
+imprt struct
+ang_cdeg = struct.unpacj('<h' data)[0]
+angle_deg = ang_cdeg / 1000.0
+

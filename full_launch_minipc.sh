@@ -5,12 +5,15 @@
 # HOW TO USE:
 #   bash full_launch_minipc.sh               # normal / test mode
 #   DELAY_SEC=1.0 bash full_launch_minipc.sh # competition (1s delay)
+#   NAV=0 bash full_launch_minipc.sh         # disable autonomous nav
 #
 # KEY FIXES IN THIS VERSION:
 #   1. ROS env vars set BEFORE launching — were missing in SSH sessions
 #   2. Color pipeline uses input_reliable:=true (D435 compressed = RELIABLE)
 #   3. FastDDS UDP-only — fixes silent cross-machine topic blocking
 #   4. Stereo camera: uses /dev/video_stereo symlink (stable) falling back to scan
+#   5. [NEW] nav_cmd_mux.py — joystick-priority mux for autonomous nav
+#   6. [NEW] nav_depth_processor.py — depth-based obstacle avoidance + A*
 # ============================================================================
 
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -41,8 +44,7 @@ fi
 set -u
 
 # ─────────────────────────────────────────────────────────────────────────────
-# REQUIRED: These env vars must be set. The miniPC ~/.bashrc was missing them.
-# Run fix_minipc_env.sh once to persist them — for now we set them here.
+# REQUIRED env vars
 # ─────────────────────────────────────────────────────────────────────────────
 export ROS_DOMAIN_ID=42
 export ROS_LOCALHOST_ONLY=0
@@ -50,7 +52,6 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 ok "ROS_DOMAIN_ID=42  ROS_LOCALHOST_ONLY=0  SUBNET"
 
 # FastDDS: force UDP-only, clear stale SHM locks
-# Shared-memory transport silently blocks cross-machine topic discovery.
 FASTDDS_XML=/tmp/fastdds_udp_only.xml
 cat > "$FASTDDS_XML" << 'EOF'
 <?xml version="1.0" encoding="UTF-8" ?>
@@ -76,9 +77,12 @@ rm -f /dev/shm/fastrtps_* /tmp/fastrtps_* 2>/dev/null
 ok "FastDDS: UDP-only, stale SHM cleared"
 echo ""
 
-# Competition delay
+# Feature flags
 DELAY_SEC=${DELAY_SEC:-0.0}
+NAV=${NAV:-1}   # set NAV=0 to skip autonomous nav nodes
+
 log "Delay mode: ${DELAY_SEC}s $([ "$DELAY_SEC" = "0.0" ] && echo '(live)' || echo '(COMPETITION)')"
+[ "$NAV" = "1" ] && log "Autonomous nav: ENABLED" || log "Autonomous nav: DISABLED (NAV=0)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Kill stale processes
@@ -90,6 +94,8 @@ pkill -f "stereo_camera_publisher"    2>/dev/null
 pkill -f "robot_state_publisher"      2>/dev/null
 pkill -f "static_transform_publisher" 2>/dev/null
 pkill -f "joy_to_arduino"             2>/dev/null
+pkill -f "nav_depth_processor"        2>/dev/null
+pkill -f "nav_cmd_mux"                2>/dev/null
 sleep 2; ok "Cleared"
 echo ""
 
@@ -98,7 +104,7 @@ trap 'echo ""; log "Shutting down..."; kill 0; exit' SIGINT SIGTERM
 # ══════════════════════════════════════════════════════════════════════════════
 # 1 · TF TREE
 # ══════════════════════════════════════════════════════════════════════════════
-log "[1/5] TF tree..."
+log "[1/6] TF tree..."
 URDF='<?xml version="1.0"?>
 <robot name="lunar_rover">
   <link name="base_link"/>
@@ -132,7 +138,7 @@ echo ""
 # ══════════════════════════════════════════════════════════════════════════════
 # 2 · FRONT D435 CAMERA
 # ══════════════════════════════════════════════════════════════════════════════
-log "[2/5] D435 Front Camera..."
+log "[2/6] D435 Front Camera..."
 
 ros2 launch realsense2_camera rs_launch.py \
     camera_name:=camera \
@@ -161,34 +167,17 @@ echo ""
 if [ "$CAMERA_UP" = "false" ]; then
     warn "D435 topics not up yet — check: tail /tmp/rover_camera.log"
 fi
-
-# Check if the raw color topic exists (we use raw, not /compressed)
-log "  D435 raw color topic QoS:"
-ros2 topic info -v /camera/camera/color/image_raw 2>/dev/null \
-    | grep -E "Reliability|Durability" | head -4 | while read line; do
-    echo "    $line"
-done
-# (If /compressed topic is also present, it was likely published by image_transport plugins)
-if ros2 topic list 2>/dev/null | grep -q "/camera/camera/color/image_raw/compressed"; then
-    ok "  /compressed also available (image_transport republisher running)"
-else
-    warn "  /compressed NOT available — using raw topic (correct)"
-fi
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 3 · STREAMING PIPELINE
 # ══════════════════════════════════════════════════════════════════════════════
-log "[3/5] Streaming pipelines..."
+log "[3/6] Streaming pipelines..."
 
 PIPELINE="$HOME/lunar_rover_ws/optimized_image_pipeline.py"
 if [ ! -f "$PIPELINE" ]; then
     err "optimized_image_pipeline.py not found at $PIPELINE"
-    err "Copy the updated file there and re-run"
 else
-    # ── Color stream ──────────────────────────────────────────────────────
-    # Use RAW topic — realsense doesn't publish /compressed by default.
-    # (If the QoS block above was empty, the /compressed topic didn't exist.)
     python3 "$PIPELINE" \
         --ros-args \
         -p input_topic:=/camera/camera/color/image_raw \
@@ -201,17 +190,10 @@ else
         -p target_fps:=6.0 > /tmp/rover_pipe_color.log 2>&1 &
     COLOR_PID=$!
     sleep 1
-
-    if kill -0 $COLOR_PID 2>/dev/null; then
-        ok "Color pipeline (PID $COLOR_PID) → /camera/color/stream/compressed @ 6fps"
-    else
+    kill -0 $COLOR_PID 2>/dev/null && \
+        ok "Color pipeline → /camera/color/stream/compressed @ 6fps" || \
         err "Color pipeline crashed — check /tmp/rover_pipe_color.log"
-        tail -5 /tmp/rover_pipe_color.log
-    fi
 
-    # ── Depth stream ──────────────────────────────────────────────────────
-    # Aligned depth is raw Image (16UC1) — input_is_compressed=false
-    # RealSense raw topics use BEST_EFFORT QoS
     python3 "$PIPELINE" \
         --ros-args \
         -p input_topic:=/camera/camera/aligned_depth_to_color/image_raw \
@@ -224,19 +206,16 @@ else
         -p target_fps:=3.0 > /tmp/rover_pipe_depth.log 2>&1 &
     DEPTH_PID=$!
     sleep 1
-
-    if kill -0 $DEPTH_PID 2>/dev/null; then
-        ok "Depth pipeline (PID $DEPTH_PID) → /camera/depth/stream/compressed @ 3fps"
-    else
+    kill -0 $DEPTH_PID 2>/dev/null && \
+        ok "Depth pipeline → /camera/depth/stream/compressed @ 3fps" || \
         err "Depth pipeline crashed — check /tmp/rover_pipe_depth.log"
-        tail -5 /tmp/rover_pipe_depth.log
-    fi
 fi
 echo ""
-# ════════════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 4 · REAR STEREO CAMERA
-# ════════════════════════════════════════════════════════════════════════
-log "[4/5] Rear stereo camera..."
+# ══════════════════════════════════════════════════════════════════════════════
+log "[4/6] Rear stereo camera..."
 
 STEREO_SCRIPT=""
 for candidate in \
@@ -248,7 +227,6 @@ done
 if [ -z "$STEREO_SCRIPT" ]; then
     warn "stereo_camera_publisher.py not found — rear camera disabled"
 else
-    # Publisher handles device detection internally now
     python3 "$STEREO_SCRIPT" \
         --ros-args \
         -p device:=/dev/video_stereo \
@@ -259,7 +237,6 @@ else
 
     sleep 3
 
-    # Verify it's actually producing frames before starting combiner
     STEREO_OK=false
     for i in 1 2 3; do
         COUNT=$(ros2 topic hz /camera_rear/left/image_raw \
@@ -294,14 +271,14 @@ else
             -p target_fps:=10.0 > /tmp/rover_pipe_rear.log 2>&1 &
 
         sleep 2
-        ok "Rear stereo pipeline running  →  /camera_rear/stream/compressed @ 10fps"
+        ok "Rear stereo pipeline → /camera_rear/stream/compressed @ 10fps"
     fi
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 5 · JOY → ARDUINO
+# 5 · JOY → ARDUINO  (direct serial, always runs)
 # ══════════════════════════════════════════════════════════════════════════════
-log "[5/5] Joy → Arduino..."
+log "[5/6] Joy → Arduino..."
 
 ARDUINO_PORT=""
 for p in /dev/ttyACM0 /dev/ttyACM1 /dev/ttyUSB0; do
@@ -318,15 +295,81 @@ if [ -z "$JOY_SCRIPT" ]; then
 elif [ -n "$ARDUINO_PORT" ]; then
     python3 "$JOY_SCRIPT" > /tmp/rover_arduino.log 2>&1 &
     sleep 2
-    ok "Joy→Arduino on $ARDUINO_PORT"
+    ok "Joy→Arduino on $ARDUINO_PORT (direct serial)"
 else
     warn "No Arduino found at ACM0/ACM1/USB0"
 fi
 echo ""
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# 6 · AUTONOMOUS NAVIGATION NODES
+# ══════════════════════════════════════════════════════════════════════════════
+if [ "$NAV" = "1" ]; then
+    log "[6/6] Autonomous navigation..."
+
+    # Find nav scripts
+    NAV_PROC=""
+    NAV_MUX=""
+    for loc in "$(dirname "$0")" ~/lunar_rover_ws; do
+        [ -f "$loc/nav_depth_processor.py" ] && NAV_PROC="$loc/nav_depth_processor.py"
+        [ -f "$loc/nav_cmd_mux.py"         ] && NAV_MUX="$loc/nav_cmd_mux.py"
+    done
+
+    if [ -z "$NAV_PROC" ]; then
+        warn "nav_depth_processor.py not found — autonomous nav disabled"
+        warn "  Copy nav_depth_processor.py to ~/lunar_rover_ws/"
+    elif [ -z "$NAV_MUX" ]; then
+        warn "nav_cmd_mux.py not found — autonomous nav disabled"
+        warn "  Copy nav_cmd_mux.py to ~/lunar_rover_ws/"
+    else
+        # Depth odometry (better than cmd_vel dead-reckoning in regolith)
+        NAV_ODOM="$(dirname "$0")/nav_depth_odom.py"
+        [ ! -f "$NAV_ODOM" ] && NAV_ODOM="$HOME/lunar_rover_ws/nav_depth_odom.py"
+        if [ -f "$NAV_ODOM" ]; then
+            python3 "$NAV_ODOM" > /tmp/rover_nav_odom.log 2>&1 &
+            ODOM_PID=$!
+            sleep 1
+            kill -0 $ODOM_PID 2>/dev/null && \
+                ok "nav_depth_odom running (PID $ODOM_PID) — depth ground-flow" || \
+                warn "nav_depth_odom failed — check /tmp/rover_nav_odom.log"
+        else
+            warn "nav_depth_odom.py not found — using cmd_vel dead-reckoning"
+        fi
+        # Start cmd mux first (gates /cmd_vel)
+        python3 "$NAV_MUX" > /tmp/rover_nav_mux.log 2>&1 &
+        MUX_PID=$!
+        sleep 1
+
+        if kill -0 $MUX_PID 2>/dev/null; then
+            ok "nav_cmd_mux running (PID $MUX_PID)"
+            ok "  MANUAL mode by default — joystick has priority"
+            ok "  Touch stick → manual override; release → auto resumes"
+        else
+            err "nav_cmd_mux crashed — check /tmp/rover_nav_mux.log"
+        fi
+
+        # Start depth processor (reads depth, runs A*, sends /nav/cmd_vel)
+        python3 "$NAV_PROC" > /tmp/rover_nav_proc.log 2>&1 &
+        PROC_PID=$!
+        sleep 2
+
+        if kill -0 $PROC_PID 2>/dev/null; then
+            ok "nav_depth_processor running (PID $PROC_PID)"
+            ok "  Listening for goals on /nav/goal_camera_frame"
+            ok "  Publishing path to /nav/planned_path"
+        else
+            err "nav_depth_processor crashed — check /tmp/rover_nav_proc.log"
+            tail -5 /tmp/rover_nav_proc.log
+        fi
+    fi
+else
+    log "[6/6] Autonomous nav skipped (NAV=0)"
+fi
+echo ""
+
+# ─────────────────────────────────────────────────────────────────────────────
 # VERIFY
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 log "Verifying topics (3s wait)..."
 sleep 3
 ALL_OK=true
@@ -339,18 +382,17 @@ for T in /camera/color/stream/compressed /camera/depth/stream/compressed; do
     fi
 done
 
-if [ "$ALL_OK" = "false" ]; then
-    echo ""
-    warn "Troubleshoot with:"
-    warn "  tail /tmp/rover_pipe_color.log    ← color pipeline log"
-    warn "  tail /tmp/rover_camera.log        ← D435 camera log"
-    warn "  ros2 topic info -v /camera/camera/color/image_raw/compressed"
+if [ "$NAV" = "1" ]; then
+    for T in /nav/cmd_vel /nav/planned_path; do
+        if ros2 topic list 2>/dev/null | grep -q "^${T}$"; then
+            ok "$T"
+        else
+            warn "$T — not yet (will appear when nav nodes are ready)"
+        fi
+    done
 fi
-echo ""
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SUMMARY
-# ──────────────────────────────────────────────────────────────────────────────
+echo ""
 echo -e "${BOLD}${GREEN}"
 echo "  ╔══════════════════════════════════════════╗"
 echo "  ║         ✓✓✓  MINI PC READY  ✓✓✓         ║"
@@ -358,18 +400,33 @@ echo "  ╚═══════════════════════
 echo -e "${NC}"
 echo "  Delay: ${DELAY_SEC}s"
 echo ""
-echo "  Streaming topics for RViz:"
+echo "  Streaming topics:"
 echo "    /camera/color/stream/compressed   ← front RGB @ 6fps"
 echo "    /camera/depth/stream/compressed   ← front depth @ 3fps"
 echo "    /camera_rear/stream/compressed    ← rear stereo @ 6fps"
 echo ""
-echo "  RViz: set Transport Hint = compressed on each Image display"
-echo ""
+if [ "$NAV" = "1" ]; then
+    echo "  Autonomous nav topics:"
+    echo "    /nav/goal_camera_frame  ← send goal here (from laptop relay)"
+    echo "    /nav/cmd_vel            ← nav planner output"
+    echo "    /nav/planned_path       ← A* path for RViz"
+    echo "    /nav/occupancy_grid     ← obstacle map for RViz"
+    echo "    /nav/status             ← IDLE/NAVIGATING/GOAL_REACHED"
+    echo "    /cmd_vel                ← final output (mux: joy wins)"
+    echo ""
+    echo "  TO USE:"
+    echo "    1. On laptop: select 'Publish Point' tool in RViz"
+    echo "    2. Click on the DEPTH IMAGE panel"
+    echo "    3. Green path appears → rover drives autonomously"
+    echo "    4. Touch joystick → instant manual override"
+    echo "    5. Release joystick → nav resumes after 0.7s"
+    echo ""
+fi
 echo "  Logs:"
 echo "    tail -f /tmp/rover_pipe_color.log"
 echo "    tail -f /tmp/rover_pipe_depth.log"
-echo "    tail -f /tmp/rover_stereo.log"
-echo "    tail -f /tmp/rover_camera.log"
+echo "    tail -f /tmp/rover_nav_proc.log"
+echo "    tail -f /tmp/rover_nav_mux.log"
 echo ""
 echo "  Press Ctrl+C to stop all"
 echo ""

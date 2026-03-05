@@ -3,24 +3,28 @@ Panels:
     Help Height: 138
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /Nav Path & Markers1
+        - /Obstacle Map1
       Splitter Ratio: 0.5
-    Tree Height: 138
+    Tree Height: 500
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
     Name: Views
     Splitter Ratio: 0.5
+
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.5
-      Cell Size: 1
+
+    - Alpha: 0.3
+      Cell Size: 0.5
       Class: rviz_default_plugins/Grid
-      Color: 160; 160; 164
+      Color: 80; 80; 80
       Enabled: true
       Line Style:
-        Line Width: 0.029999999329447746
+        Line Width: 0.02
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -29,59 +33,26 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 10
-      Reference Frame: <Fixed Frame>
+      Plane Cell Count: 20
+      Reference Frame: odom
       Value: true
+
     - Class: rviz_default_plugins/TF
       Enabled: true
-      Filter (blacklist): ""
-      Filter (whitelist): ""
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        base_link:
-          Value: true
-        camera_color_frame:
-          Value: true
-        camera_color_optical_frame:
-          Value: true
-        camera_depth_frame:
-          Value: true
-        camera_depth_optical_frame:
-          Value: true
-        camera_link:
-          Value: true
-        camera_rear_link:
-          Value: true
-      Marker Scale: 1
+      Marker Scale: 0.5
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
-      Tree:
-        base_link:
-          camera_link:
-            camera_color_frame:
-              camera_color_optical_frame:
-                {}
-            camera_depth_frame:
-              {}
-            camera_depth_optical_frame:
-              {}
-          camera_rear_link:
-            {}
       Update Interval: 0
       Value: true
 
-    # ── FRONT RGB CAMERA ───────────────────────────────────────────────────
-    # Transport MUST be "compressed" when subscribing to CompressedImage topic.
-    # Without this RViz silently shows nothing.
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Front Camera (D435)
+      Name: Front Camera (D435 RGB)
       Normalize Range: true
       Topic:
         Depth: 5
@@ -92,12 +63,8 @@ Visualization Manager:
       Transport Hint: compressed
       Value: true
 
-    # ── FRONT DEPTH CAMERA ─────────────────────────────────────────────────
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
       Name: Front Depth
       Normalize Range: true
       Topic:
@@ -109,12 +76,8 @@ Visualization Manager:
       Transport Hint: compressed
       Value: true
 
-    # ── REAR STEREO CAMERA ─────────────────────────────────────────────────
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
       Name: Rear Stereo
       Normalize Range: true
       Topic:
@@ -126,50 +89,65 @@ Visualization Manager:
       Transport Hint: compressed
       Value: true
 
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Navigation Goals
-      Namespaces:
-        {}
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /goal_markers
-      Value: true
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 25; 255; 0
       Enabled: true
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
       Line Style: Lines
-      Line Width: 0.029999999329447746
-      Name: Planned Path
+      Line Width: 0.04
+      Name: Nav Path (A*)
       Offset:
         X: 0
         Y: 0
-        Z: 0
-      Pose Color: 255; 85; 255
+        Z: 0.05
       Pose Style: None
-      Radius: 0.029999999329447746
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
       Topic:
         Depth: 5
         Durability Policy: Volatile
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /planned_path
+        Value: /nav/planned_path
       Value: true
+
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Nav Path & Markers
+      Namespaces:
+        rover: true
+        path: true
+        path_done: true
+        dist_ticks: true
+        dist_labels: true
+        turn_arrows: true
+        goal: true
+        next_wp: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav/viz_markers
+      Value: true
+
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Obstacle Map
+      Namespaces:
+        obstacles: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav/obstacle_markers
+      Value: true
+
   Enabled: true
   Global Options:
-    Background Color: 48; 48; 48
-    Fixed Frame: base_link
+    Background Color: 30; 30; 35
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -177,21 +155,6 @@ Visualization Manager:
       Hide Inactive Objects: true
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
-    - Class: rviz_default_plugins/SetGoal
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /goal_pose
-    - Class: rviz_default_plugins/PublishPoint
-      Single click: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /clicked_point
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
@@ -199,40 +162,21 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.5
-      Enable Stereo Rendering:
-        Stereo Eye Separation: 0.05999999865889549
-        Stereo Focal Distance: 1
-        Swap Stereo Eyes: false
-        Value: false
+      Distance: 5.0
       Focal Point:
-        X: 0.5
+        X: 1.0
         Y: 0
         Z: 0
-      Focal Shape Fixed Size: true
-      Focal Shape Size: 0.05000000074505806
-      Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5
-      Target Frame: <Fixed Frame>
+      Near Clip Distance: 0.01
+      Pitch: 0.8
+      Target Frame: odom
       Value: Orbit (rviz)
       Yaw: 0
     Saved: ~
+
 Window Geometry:
-  Displays:
-    collapsed: false
-  Front Camera (D435):
-    collapsed: false
-  Front Depth:
-    collapsed: false
   Height: 1030
-  Hide Left Dock: false
-  Hide Right Dock: false
-  Rear Stereo:
-    collapsed: false
-  Views:
-    collapsed: false
   Width: 1600
-  X: 658
-  Y: 522
+  X: 0
+  Y: 0
