@@ -119,26 +119,3 @@ ros2 run lunar_robot_hardware controller_teleop
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py
 
 
-//////////////////////////////////////////////////////////////////////////
-ToDo:
-- Get Point click navigation WORKING by 2/17
-  - add object detection
-  - add objects to rviz 3d map
-  - genorate path from rover to a clicked point
-  - use IMU data to stay on the path
-- need to fix RViz and RTAB map *(Work in progress currently looking into new solutions)
-    -  Is it possible to make and use the map all at once or do we need to make the map then use it?
-- Add a better and more secure option for startup. (Current static IP and one launch file)
-
-//////////////////////////////////////////////////////////////////////////
-
-## Point click
-I am working with streaming a D435 camera from a mini pc to a laptop. I am using RViz to stream the image to my laptop but I would also like to use nav2 and a point click navigation to avoid objects. I attempted to make a GUI to allow me to interact wiht the Depth image but I cant get object detection to work and if I manualy select an object on the GUI i can keep track of the object as long as it stays in frame. However none of these points show up in Rviz. The GUI is nice but i am looking more for a point click navigation that detects obsticasl and can makes a path to avoid the obsticals. most of the obsticals will be about 30 to 40 cm rocks. While streaming I dont stream the point cloud becasue it lags to much. The camera is about 75 cm above the ground at a 25 degree angle. I can't see what dirrectly infront of the rover so id like to make the path so as I approch an object I stay far enough away. I am also moving in regolith so mobility is not the best and I dont have encoder data. Can you help me add object detection and keep the manuale selection if it fails, I would like the obsticals to appear in the 3d rviz window so a path can the be drawn and nav2 can be used. 
-
-Can you help me get a basic point click navigation for my rover. I was attempting to have a new GUI appear so it can do object detections and path planning that is sent to RViz to then use nav2 but ht dose not work. Can you help me get a basic autonomas working? I would like the basic point click so that when a point in front of the rover is clicked the rover will drive to that point. I am struggeling with the object detection becasue the camera is about 70 cm off the ground and is at a 25 degree angle so the veiw shows a gradeaint going ferther away leading to challenges with object detection. for now I was trying to implement the ability to manualy click on objects and seting that as an obstical but currently non of this data is getting to RViz. Can you help me simplify it for a test? I would like to select a point in veiw that could be a few meters away and drie untill I reach that point. I am now able to get IMU data aswell.
-
-
-## Teleop
-
-## Point cloud and SLAM
-Ferther down the line
