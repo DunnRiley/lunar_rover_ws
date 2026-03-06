@@ -59,6 +59,8 @@ uint8_t data[3];
 uint8_t idx = 0;
 
 enum RxState { WAIT_START, READ_DATA, WAIT_END };
+unsigned long rxLastByteMs = 0;
+const unsigned long RX_TIMEOUT_MS = 30;   // 30ms is plenty at 115200
 RxState rxState = WAIT_START;
 
 int16_t drivemin = 29325;
@@ -79,7 +81,7 @@ volatile uint16_t leftActuatorCount  = 32000;
 
 // Send counts every 50 ms
 unsigned long lastTelemetryMs = 0;
-const unsigned long telemetryPeriodMs = 50;
+const unsigned long telemetryPeriodMs = 500;
 
 // ── Function prototypes ──────────────────────────────────────────────────
 void HandleInput(uint8_t device, uint8_t speed, uint8_t direction);
@@ -157,6 +159,7 @@ void setup() {
  //  attachInterrupt(digitalPinToInterrupt(ActuatorEncoder2A), rightEncoderISR, CHANGE);
 
   Wire.begin();
+  Wire.setWireTimeout(2500, true);
 
   if (initMPU()) {
     calibrateGyro();
@@ -165,31 +168,48 @@ void setup() {
 
 // ── Main loop ─────────────────────────────────────────────────────────────
 void loop() {
+
+    // Reads in Serial Input
   while (Serial.available() > 0) {
-    uint8_t b = (uint8_t)Serial.read();
+  uint8_t b = (uint8_t)Serial.read();
+  rxLastByteMs = millis();
 
-    switch (rxState) {
-      case WAIT_START:
-        if (b == START) {
-          idx = 0;
-          rxState = READ_DATA;
-        }
-        break;
+  switch (rxState) {
+    case WAIT_START:
+      if (b == START) {
+        idx = 0;
+        rxState = READ_DATA;
+      }
+      break;
 
-      case READ_DATA:
-        data[idx++] = b;
-        if (idx >= 3) rxState = WAIT_END;
-        break;
+    case READ_DATA:
+      data[idx++] = b;
+      if (idx >= 3) rxState = WAIT_END;
+      break;
 
-      case WAIT_END:
-        if (b == END) {
-          Serial.write(0xAA);   // ACK
-          HandleInput(data[0], data[1], data[2]);
-        }
+    case WAIT_END:
+      if (b == END) {
+        Serial.write(0xAA);          // ACK
+        HandleInput(data[0], data[1], data[2]);
         rxState = WAIT_START;
-        break;
-    }
+      } else if (b == START) {
+        // resync if a new packet starts unexpectedly
+        idx = 0;
+        rxState = READ_DATA;
+      } else {
+        // stay in WAIT_END until END or timeout
+      }
+      break;
+  }
 }
+
+// timeout: if we got stuck mid-packet, reset
+if (rxState != WAIT_START && (millis() - rxLastByteMs) > RX_TIMEOUT_MS) {
+  rxState = WAIT_START;
+  idx = 0;
+}
+
+// Actuator Switch Case
     switch (actuatorState) {
         case CALIBRATE:
             calibrate();
@@ -208,6 +228,7 @@ void loop() {
         break;
     }
   
+   // Sends Telemetry Data every 50 ms
   if (millis() - lastTelemetryMs >= telemetryPeriodMs) {
     lastTelemetryMs = millis();
     readMPU();
@@ -216,7 +237,7 @@ void loop() {
 
 }
 
-
+// Sends Telemetry Data
 void sendTelemetry(){
     chksum = 0;
     Serial2.write(START);
@@ -228,6 +249,8 @@ void sendTelemetry(){
     Serial2.write(END);
 }
 
+
+// Sends Encoder Telemetry Data
 void sendENCCount(){
     uint16_t leftCount;
     noInterrupts();
@@ -236,7 +259,7 @@ void sendENCCount(){
     writeUInt16LE(Serial2, leftCount);
 }
 
-
+// Sends IMU telemetry data
 void sendIMUTelemetry() {
   writeInt32LE(Serial2, ax_mms2);
   writeInt32LE(Serial2, ay_mms2);
@@ -246,6 +269,7 @@ void sendIMUTelemetry() {
   writeInt32LE(Serial2, gz_scale);
 }
 
+// sends a int32_t as 4 bytes and updates checksum
 void writeInt32LE(HardwareSerial &port, int32_t val) {
   uint8_t b0 = (uint8_t)(val & 0xFF);
   uint8_t b1 = (uint8_t)((val >> 8) & 0xFF);
@@ -258,6 +282,7 @@ void writeInt32LE(HardwareSerial &port, int32_t val) {
   port.write(b3); chksum ^= b3;
 }
 
+// Sends a uint16_t as 2 byets, also updates a checksum
 void writeUInt16LE(HardwareSerial &port, uint16_t val) {
   uint8_t b0 = (uint8_t)(val & 0xFF);
   uint8_t b1 = (uint8_t)((val >> 8) & 0xFF);
@@ -288,7 +313,7 @@ bool initMPU() {
 }
 
 
-
+// Reads and processes mpu data
 bool readMPU() {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B);
@@ -325,7 +350,7 @@ bool readMPU() {
 }
 
 
-
+//calibrates the gyroscope.
 void calibrateGyro() {
   const int N = 500;
   long sx = 0, sy = 0, sz = 0;
@@ -350,7 +375,7 @@ void calibrateGyro() {
 
 
 
-
+// Calibrates the encoder, sets dump position as 0 value
 void calibrate() {
   static uint16_t lastCount = 0;
   static unsigned long lastChangeMs = 0;
@@ -383,8 +408,8 @@ void calibrate() {
     lastChangeMs = now;
   }
 
-  // if no count change for 250ms, assume we've hit the end-stop (or stalled)
-  if (now - lastChangeMs > 250) {
+  // if no counwsc2t change for 250ms, assume we've hit the end-stop (or stalled)
+  if (now - lastChangeMs > 500) {
     analogWrite(RightActuatorPWM, 0);
     analogWrite(LeftActuatorPWM, 0);
 
@@ -404,31 +429,31 @@ void calibrate() {
 
 
 // Actuator Controls
-
+// moves Actuators to Drive position
 void drivepositionact(){
     uint16_t leftCount;
     noInterrupts();
     leftCount = leftActuatorCount;
     interrupts();
-    if (leftCount < drivemin - 50){
+    if (leftCount < drivemin - 100){
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR,  0);
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
     }
-    else if (leftCount < drivemin - 25){
+    else if (leftCount < drivemin - 50){
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR, 0);
         analogWrite(RightActuatorPWM, 125);
         analogWrite(LeftActuatorPWM, 125);
     }
-    else if (leftCount > drivemax + 50){
+    else if (leftCount > drivemax + 100){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
     }
-    else if (leftCount > drivemax + 25){
+    else if (leftCount > drivemax + 50){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
         analogWrite(RightActuatorPWM, 125);
@@ -439,30 +464,32 @@ void drivepositionact(){
     }
 }
 
+
+// Moves Actuators to Dump Position
 void dumppositionact(){
     uint16_t leftCount;
     noInterrupts();
     leftCount = leftActuatorCount;
     interrupts();
-    if (leftCount < dumpmin - 50){
+    if (leftCount < dumpmin - 100){
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR,  0);
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
     }
-    else if (leftCount < dumpmin - 25){
+    else if (leftCount < dumpmin - 50){
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR, 0);
         analogWrite(RightActuatorPWM, 125);
         analogWrite(LeftActuatorPWM, 125);
     }
-    else if (leftCount > dumpmax + 50){
+    else if (leftCount > dumpmax + 100){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
     }
-    else if (leftCount > dumpmax + 25){
+    else if (leftCount > dumpmax + 50){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
         analogWrite(RightActuatorPWM, 125);
@@ -473,30 +500,32 @@ void dumppositionact(){
     }
 }
 
+
+// Moves actuators to dig position
 void digpositionact(){
     uint16_t leftCount;
     noInterrupts();
     leftCount = leftActuatorCount;
     interrupts();
-    if (leftCount < digmin - 50){
+    if (leftCount < digmin - 100){
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR,  0);
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
     }
-    else if (leftCount < digmin - 25){
+    else if (leftCount < digmin - 50){
         digitalWrite(RightActuatorDIR, 0);
         digitalWrite(LeftActuatorDIR, 0);
         analogWrite(RightActuatorPWM, 125);
         analogWrite(LeftActuatorPWM, 125);
     }
-    else if (leftCount > digmax + 50){
+    else if (leftCount > digmax + 100){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
         analogWrite(RightActuatorPWM, 255);
         analogWrite(LeftActuatorPWM,  255);
     }
-    else if (leftCount > digmax + 25){
+    else if (leftCount > digmax + 50){
         digitalWrite(RightActuatorDIR, 1);
         digitalWrite(LeftActuatorDIR,  1);
         analogWrite(RightActuatorPWM, 125);
@@ -508,7 +537,7 @@ void digpositionact(){
 }
 
 // ACTUATOR ENCODER READOUTS
-
+//reads left encoder vals
 void leftEncoderISR() {
   bool a = digitalRead(ActuatorEncoder1A);
   bool b = digitalRead(ActuatorEncoder1B);
@@ -517,6 +546,8 @@ void leftEncoderISR() {
   else        leftActuatorCount--;
 }
 
+// Reads encoders from the right, some wires need to be fixed
+// Im LAZY
 // void rightEncoderISR() {
 //   bool a = digitalRead(ActuatorEncoder2A);
 //   bool b = digitalRead(ActuatorEncoder2B);
@@ -534,13 +565,15 @@ void MotorDriving(uint8_t pwmPin, uint8_t speed, uint8_t direction, uint8_t dirP
   analogWrite(pwmPin, speed);
 }
 
+// Moves both left motors together
 void DriveLeft(uint8_t speed, uint8_t direction) {
   digitalWrite(FrontLeftDIR, direction);
-  digitalWrite(BackLeftDIR,  direction);
+  digitalWrite(BackLeftDIR,  direction);w
   analogWrite(FrontLeftPWM, speed);
   analogWrite(BackLeftPWM,  speed);
 }
 
+// Moves both right motors together
 void DriveRight(uint8_t speed, uint8_t direction) {
   digitalWrite(FrontRightDIR, direction);
   digitalWrite(BackRightDIR,  direction);
@@ -548,6 +581,7 @@ void DriveRight(uint8_t speed, uint8_t direction) {
   analogWrite(BackRightPWM,  speed);
 }
 
+// Moves both Actuators Together
 void ActuatorMovement(uint8_t speed, uint8_t direction) {
   digitalWrite(RightActuatorDIR, direction);
   digitalWrite(LeftActuatorDIR,  direction);
@@ -557,7 +591,7 @@ void ActuatorMovement(uint8_t speed, uint8_t direction) {
 
 
 
-
+// Stops everything
 void STOPALL() {
     analogWrite(FrontLeftPWM,    0);
     analogWrite(FrontRightPWM,   0);
@@ -565,35 +599,43 @@ void STOPALL() {
     analogWrite(BackRightPWM,    0);
     analogWrite(LeftActuatorPWM, 0);
     analogWrite(RightActuatorPWM,0);
+    myServo.write(90);
 }
 
+// Stops Actuators only
 void STOPACT(){
     analogWrite(LeftActuatorPWM, 0);
     analogWrite(RightActuatorPWM, 0);
 
 }
-
+// Moves servo
 void Servomove(uint8_t angle) {
     myServo.write(angle);
 }
 
+//Maybe add a checksum in the future?
+// Using a 5 byte input, the function will determine the proper command
+// And also execute functions of that command
 void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
     switch (device) {
+// Will move the bucket to a digging position
     case 0xA7:
         actuatorState = DIGPOSITION;
         break;
+// Will move the bucket to a driving position
     case 0xA9:
         actuatorState = DRIVEPOSITION;
         break;
+// Will Move the bucket to a dumping position
     case 0xB3:
         actuatorState = DUMPBUCKET;
         break;
-    // Sets the state machine for the actuator to calibrate
-    // Will 0 out encoder counts to be 
+// Sets the state machine for the actuator to calibrate
+// Will 0 out encoder counts to be 32000 at the highest point
     case 0xCA:
         actuatorState = CALIBRATE;
         break;
-    // Sets the Encoder Counts to be recieved values
+// Sets the Encoder Counts to be recieved values
     case 0xCB: {
         uint16_t v = ((uint16_t)speed<<8) | direction;
         noInterrupts();
@@ -601,46 +643,65 @@ void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
         interrupts();
         break;
     }
+// Another Stop signal, idk which one is real
     case 0xB4:
         STOPALL();
         break;
+// This code controls both left motors at once
     case 0x05:
         DriveLeft(speed, direction); 
         break;
+// This code Controls both right motors at once
     case 0x06: 
         DriveRight(speed, direction); 
         break;
+// This code controls both actuators at once
     case 0x08: 
         ActuatorMovement(speed, direction); 
         break;
-// This Code takes in a 
+// This Code moves the SERVO at digital 10
+// 360 motor
+// 90 - STOP
+// 45 - Counter Clockwise
+// 135 - Clockwise 
     case 0x11:
         Servomove(speed);
         break;
+
+// Code Below is meant for testing and should never be called normally
+    // Controls Right Actuator
     case 0xD4: 
         MotorDriving(RightActuatorPWM, speed, direction, RightActuatorDIR); 
         break;
+    // Controls  Left Actuator
     case 0xF7: 
         MotorDriving(LeftActuatorPWM, speed, direction, LeftActuatorDIR);
         break;
+    // Controls Front Left Motor
     case 0x01: 
         MotorDriving(FrontLeftPWM,  speed, direction, FrontLeftDIR);
         break;
+    // Controls Front Right Motor
     case 0x02:
         MotorDriving(FrontRightPWM, speed, direction, FrontRightDIR);
         break;
+    // Controls Back Left Motor
     case 0x03:
         MotorDriving(BackLeftPWM,   speed, direction, BackLeftDIR); 
         break;
+    // Controls Back Right Motor
     case 0x04:
         MotorDriving(BackRightPWM,  speed, direction, BackRightDIR); 
         break;
+    // STOPS all movement functions
     case 0xFF: 
         STOPALL(); 
         break;
+    // Forces a Telemetry Send
     case 0xD1:
         readMPU();
         sendTelemetry();
+        break;
     default:  
         break;
   }
