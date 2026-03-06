@@ -274,32 +274,41 @@ else
         ok "Rear stereo pipeline → /camera_rear/stream/compressed @ 10fps"
     fi
 fi
-
 # ══════════════════════════════════════════════════════════════════════════════
 # 5 · JOY → ARDUINO  (direct serial, always runs)
 # ══════════════════════════════════════════════════════════════════════════════
 log "[5/6] Joy → Arduino..."
-
 ARDUINO_PORT=""
 for p in /dev/ttyACM0 /dev/ttyACM1 /dev/ttyUSB0; do
     [ -e "$p" ] && ARDUINO_PORT="$p" && break
 done
-
 JOY_SCRIPT=""
 for loc in "$(dirname "$0")/joy_to_arduino.py" ~/lunar_rover_ws/joy_to_arduino.py; do
     [ -f "$loc" ] && JOY_SCRIPT="$loc" && break
 done
-
 if [ -z "$JOY_SCRIPT" ]; then
     warn "joy_to_arduino.py not found"
 elif [ -n "$ARDUINO_PORT" ]; then
+    # Start joy_node first and wait until /joy is live
+    ros2 run joy joy_node > /tmp/rover_joy_node.log 2>&1 &
+    log "  Waiting for joy_node to publish /joy..."
+    JOY_UP=false
+    for i in $(seq 1 10); do
+        sleep 1
+        if ros2 topic list 2>/dev/null | grep -q "^/joy$"; then
+            JOY_UP=true; ok "joy_node ready (${i}s)"; break
+        fi
+        echo -n "."
+    done
+    echo ""
+    [ "$JOY_UP" = "false" ] && warn "joy_node not ready — is controller plugged in? (ls /dev/input/js*)"
     python3 "$JOY_SCRIPT" > /tmp/rover_arduino.log 2>&1 &
     sleep 2
-    ok "Joy→Arduino on $ARDUINO_PORT (direct serial)"
+    ok "Joy→Arduino on $ARDUINO_PORT"
+    ok "  Logs: tail -f /tmp/rover_arduino.log  |  tail -f /tmp/rover_joy_node.log"
 else
     warn "No Arduino found at ACM0/ACM1/USB0"
 fi
-echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 6 · AUTONOMOUS NAVIGATION NODES

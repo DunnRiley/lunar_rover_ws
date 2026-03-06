@@ -53,89 +53,77 @@ def main(stdscr):
             break
 
         # -------- DRIVE --------
-        # elif key == ord('a'):
-        #     for d in [FL, FR, BL, BR]:
-        #         send_packet(ser, d, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Driving Forward      ")
+        elif key == ord('a'):
+            for d in [FL, FR, BL, BR]:
+                send_packet(ser, d, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Driving Forward      ")
 
-        # elif key == ord('d'):
-        #     for d in [FL, FR, BL, BR]:
-        #         send_packet(ser, d, SPEED, 0x01)
-        #     stdscr.addstr(10, 0, "Driving Backward     ")
+        elif key == ord('d'):
+            for d in [FL, FR, BL, BR]:
+                send_packet(ser, d, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Driving Backward     ")
 
-        # elif key == ord('w'):
-        #     send_packet(ser, FL, SPEED, 0x01)
-        #     send_packet(ser, BL, SPEED, 0x01)
-        #     send_packet(ser, FR, SPEED, 0x00)
-        #     send_packet(ser, BR, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Turning Left         ")
+        elif key == ord('w'):
+            send_packet(ser, FL, SPEED, 0x01)
+            send_packet(ser, BL, SPEED, 0x01)
+            send_packet(ser, FR, SPEED, 0x00)
+            send_packet(ser, BR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Turning Left         ")
 
-        # elif key == ord('s'):
-        #     send_packet(ser, FL, SPEED, 0x00)
-        #     send_packet(ser, BL, SPEED, 0x00)
-        #     send_packet(ser, FR, SPEED, 0x01)
-        #     send_packet(ser, BR, SPEED, 0x01)
-        #     stdscr.addstr(10, 0, "Turning Right        ")
+        elif key == ord('s'):
+            send_packet(ser, FL, SPEED, 0x00)
+            send_packet(ser, BL, SPEED, 0x00)
+            send_packet(ser, FR, SPEED, 0x01)
+            send_packet(ser, BR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Turning Right        ")
 
         # -------- INDIVIDUAL MOTOR TEST --------
-        # elif key == ord('1'):
-        #     stop_drive(ser)
-        #     send_packet(ser, FL, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Testing FL Motor     ")
-
-        # elif key == ord('2'):
-        #     stop_drive(ser)
-        #     send_packet(ser, FR, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Testing FR Motor     ")
-
-        # elif key == ord('3'):
-        #     stop_drive(ser)
-        #     send_packet(ser, BL, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Testing BL Motor     ")
-
-        # elif key == ord('4'):
-        #     stop_drive(ser)
-        #     send_packet(ser, BR, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Testing BR Motor     ")
-
-        # -------- ACTUATORS --------
-        # elif key == ord('p'):
-        #     send_packet(ser, AL, SPEED, 0x00)
-        #     send_packet(ser, AR, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Actuators Forward    ")
-
-        # elif key == ord('l'):
-        #     send_packet(ser, AL, SPEED, 0x01)
-        #     send_packet(ser, AR, SPEED, 0x01)
-        #     stdscr.addstr(10, 0, "Actuators Reverse    ")
-
-        # elif key == ord('o'):
-        #     send_packet(ser, AL, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Left Actuator Fwd    ")
-
-        # elif key == ord('k'):
-        #     send_packet(ser, AL, SPEED, 0x01)
-        #     stdscr.addstr(10, 0, "Left Actuator Rev    ")
-
-        # elif key == ord('i'):
-        #     send_packet(ser, AR, SPEED, 0x00)
-        #     stdscr.addstr(10, 0, "Right Actuator Fwd   ")
-
-        # elif key == ord('j'):
-        #     send_packet(ser, AR, SPEED, 0x01)
-        #     stdscr.addstr(10, 0, "Right Actuator Rev   ")
-
         elif key == ord('1'):
-            send_packet(ser, SERVO, 90, 0x01)
-            stdscr.addstr(10, 0, "Sevo to 90   ")
+            stop_drive(ser)
+            send_packet(ser, FL, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing FL Motor     ")
 
         elif key == ord('2'):
-            send_packet(ser, SERVO, 180, 0x01)
-            stdscr.addstr(10, 0, "Sevo to 180   ")
+            stop_drive(ser)
+            send_packet(ser, FR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing FR Motor     ")
 
         elif key == ord('3'):
-            send_packet(ser, SERVO, 0, 0x01)
-            stdscr.addstr(10, 0, "Sevo to 0   ")
+            stop_drive(ser)
+            send_packet(ser, BL, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing BL Motor     ")
+
+        elif key == ord('4'):
+            stop_drive(ser)
+            send_packet(ser, BR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Testing BR Motor     ")
+
+        # -------- ACTUATORS --------
+        elif key == ord('p'):
+            send_packet(ser, AL, SPEED, 0x00)
+            send_packet(ser, AR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Actuators Forward    ")
+
+        elif key == ord('l'):
+            send_packet(ser, AL, SPEED, 0x01)
+            send_packet(ser, AR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Actuators Reverse    ")
+
+        elif key == ord('o'):
+            send_packet(ser, AL, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Left Actuator Fwd    ")
+
+        elif key == ord('k'):
+            send_packet(ser, AL, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Left Actuator Rev    ")
+
+        elif key == ord('i'):
+            send_packet(ser, AR, SPEED, 0x00)
+            stdscr.addstr(10, 0, "Right Actuator Fwd   ")
+
+        elif key == ord('j'):
+            send_packet(ser, AR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Right Actuator Rev   ")
 
         # -------- KILL --------
         elif key == ord(' '):
