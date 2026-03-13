@@ -135,7 +135,7 @@ ENCODER_STATE_FILE = Path.home() / '.lunar_encoder_state.json'
 SERVO_LOG_FILE     = Path.home() / 'lunar_servo_log.csv'
 
 # ═════════════════════════════════════════════════════════════════════════
-#  CONTROLLER MAPPING
+#  CONTROLLER MAPPIN
 # ═════════════════════════════════════════════════════════════════════════
 
 AXIS_LEFT   = 1   # Left  stick Y  → LEFT  wheels
@@ -172,7 +172,7 @@ DEADZONE        = 0.10
 MAX_MOTOR       = 200
 MAX_SERIAL_HZ   = 20
 MIN_SERIAL_GAP  = 1.0 / MAX_SERIAL_HZ
-SPEED_START     = 0.50
+SPEED_START     = 1.0
 SPEED_STEP      = 0.05
 JOY_TIMEOUT     = 0.5   # seconds without /joy → stop motors
 
