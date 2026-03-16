@@ -56,7 +56,7 @@ def find_working_device(device_str: str) -> str | None:
         pass
 
     # Broad fallback
-    for d in sorted(glob.glob('/dev/video[4-9]')):
+    for d in sorted(glob.glob('/dev/video*')):
         if d not in candidates:
             candidates.append(d)
 
@@ -106,7 +106,7 @@ class StereoCameraPublisher(Node):
 
         if working is None:
             self.get_logger().error('No working stereo capture device found.')
-            self.get_logger().error('Tried symlink, sibling, and /dev/video4-9.')
+            self.get_logger().error('Tried symlink, sibling, and /dev/video0-9.')
             raise RuntimeError('Cannot find stereo camera')
 
         self.get_logger().info(f'Using capture device: {working}')

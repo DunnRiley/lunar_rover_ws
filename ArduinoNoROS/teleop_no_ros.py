@@ -43,6 +43,7 @@ def main(stdscr):
 
     stdscr.addstr(0, 0, "Rover Teleop (Curses)")
     stdscr.addstr(1, 0, "P = Servo + 15 deg")
+    stdscr.addstr(2, 0, "r and f spin with diagnal dirrection")
     stdscr.addstr(3, 0, "SPACE = Kill")
     stdscr.addstr(4, 0, "Q = Quit")
 
@@ -78,58 +79,27 @@ def main(stdscr):
             stdscr.addstr(10, 0, "Turning Right        ")
 
         # -------- INDIVIDUAL MOTOR TEST --------
-        elif key == ord('1'):
+        elif key == ord('f'):
             stop_drive(ser)
             send_packet(ser, FL, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Testing FL Motor     ")
-
-        elif key == ord('2'):
-            stop_drive(ser)
-            send_packet(ser, FR, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Testing FR Motor     ")
-
-        elif key == ord('3'):
-            stop_drive(ser)
-            send_packet(ser, BL, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Testing BL Motor     ")
-
-        elif key == ord('4'):
-            stop_drive(ser)
+            send_packet(ser, FR, SPEED, 0x01)
+            send_packet(ser, BL, SPEED, 0x01)
             send_packet(ser, BR, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Testing BR Motor     ")
+            stdscr.addstr(10, 0, "Spin CCW    ")
 
-        # -------- ACTUATORS --------
-        elif key == ord('p'):
-            send_packet(ser, AL, SPEED, 0x00)
-            send_packet(ser, AR, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Actuators Forward    ")
+        elif key == ord('r'):
+            stop_drive(ser)
+            send_packet(ser, FL, SPEED, 0x01)
+            send_packet(ser, FR, SPEED, 0x00)
+            send_packet(ser, BL, SPEED, 0x00)
+            send_packet(ser, BR, SPEED, 0x01)
+            stdscr.addstr(10, 0, "Spin CW    ")
 
-        elif key == ord('l'):
-            send_packet(ser, AL, SPEED, 0x01)
-            send_packet(ser, AR, SPEED, 0x01)
-            stdscr.addstr(10, 0, "Actuators Reverse    ")
-
-        elif key == ord('o'):
-            send_packet(ser, AL, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Left Actuator Fwd    ")
-
-        elif key == ord('k'):
-            send_packet(ser, AL, SPEED, 0x01)
-            stdscr.addstr(10, 0, "Left Actuator Rev    ")
-
-        elif key == ord('i'):
-            send_packet(ser, AR, SPEED, 0x00)
-            stdscr.addstr(10, 0, "Right Actuator Fwd   ")
-
-        elif key == ord('j'):
-            send_packet(ser, AR, SPEED, 0x01)
-            stdscr.addstr(10, 0, "Right Actuator Rev   ")
 
         # -------- KILL --------
         elif key == ord(' '):
             send_packet(ser, KILL, 0, 0)
             stdscr.addstr(10, 0, "KILL                 ")
-
         else:
             stop_drive(ser)
             stdscr.addstr(10, 0, "Idle                 ")

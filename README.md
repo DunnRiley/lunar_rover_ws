@@ -15,10 +15,27 @@ source install/setup.bash
 bash full_launch_laptop.sh --start-minipc
 
 ## Run On Mini PC after RViz is launched for stereo camera
-bash ~/lunar_rover_ws/restart_rear_camera.sh
+    bash ~/lunar_rover_ws/restart_rear_camera.sh
+
+## On mini pc
+# Terminal 1 - Arduino motor bridge
+ros2 run lunar_robot_hardware arduino_motor_controller
+
+# Terminal 2 - Nav processor (A* + obstacle avoidance)
+  python3 nav_depth_processor.py
+
+# Terminal 3 - Command mux (joystick vs autonomous)
+    python3 nav_cmd_mux.py
+
+# Terminal 4 - (optional) depth odometry
+python3 nav_depth_odom.py
+
+# Laptop 
+  python3 nav_control_panel.py
+
 
 ## SLAM with RTAB-mapping (Not Implemented)
-python3 slam_launch.py
+python3 slam_launch.py  
 bash slam_laptop.sh
 
 ## Kill topics
@@ -55,7 +72,6 @@ ENC Start: 0xA5
 ENC: 2 byte integer 16 bits, min 0 max 65535 
 END: 0x55 
 
-encoders are actuators only.
 a is axelaration, g is gyro.
 
 Unpack gyro/accelaration data
@@ -117,5 +133,4 @@ ros2 run lunar_robot_hardware controller_teleop
 
 ### Terminal 2 for point click navigation
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py
-
 

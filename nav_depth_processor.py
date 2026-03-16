@@ -59,10 +59,10 @@ except ImportError:
 
 # Negate angular.z to compensate for right-side motors being wired in reverse.
 # arduino_motor_controller: left=lin-ang, right=lin+ang but right is flipped.
-RIGHT_FLIP_COMPENSATION = True
+RIGHT_FLIP_COMPENSATION = False
 
 # Negate linear.x because positive cmd_vel linear drives the rover backward.
-REVERSE_LINEAR = True
+REVERSE_LINEAR = False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -251,9 +251,12 @@ class NavDepthProcessor(Node):
         self._img_w = 424; self._img_h = 240
 
         # goal
-        self._goal_xy    = None
-        self._goal_depth = None
-        self._odo        = Odometer()
+        # goal
+        self._goal_xy        = None
+        self._goal_depth     = None   # click depth in metres
+        self._goal_cam_x     = None   # camera-frame lateral X at click (metres)
+        self._goal_off_frame = False  # True once goal has exited camera FOV
+        self._odo            = Odometer()
 
         # path
         self._path     = []
@@ -316,7 +319,7 @@ class NavDepthProcessor(Node):
         self.create_timer(0.20,             self._timer_progress)
         self.create_timer(0.05,             self._timer_viz)
 
-        self.get_logger().info('nav_depth_processor v4  ready')
+        self.get_logger().info('nav_depth_processor ready')
         self.get_logger().info(
             f'  right_flip={self._right_flip}  reverse_linear={self._rev_lin}  '
             f'lookahead={self._lookahead}m')
@@ -390,14 +393,16 @@ class NavDepthProcessor(Node):
               f'depth={cz:.2f}m  stop_after={stop_dist:.2f}m', flush=True)
 
         with self._lock:
-            self._goal_xy    = (gx, gy)
-            self._goal_depth = cz
-            self._path       = []
-            self._path_idx   = 0
-            self._state      = 'NAVIGATING'
-            self._active     = True
-            self._stuck_t    = time.monotonic()
-            self._stuck_pos  = (rx, ry)
+            self._goal_xy        = (gx, gy)
+            self._goal_depth     = cz
+            self._goal_cam_x     = cx   # lateral camera-frame position at click (metres)
+            self._goal_off_frame = False
+            self._path           = []
+            self._path_idx       = 0
+            self._state          = 'NAVIGATING'
+            self._active         = True
+            self._stuck_t        = time.monotonic()
+            self._stuck_pos      = (rx, ry)
 
         self._prev_yaw_err = 0.0
         self._odo.reset()
@@ -544,34 +549,60 @@ class NavDepthProcessor(Node):
 
     def _timer_control(self):
         with self._lock:
-            active       = self._active; state = self._state
-            path         = list(self._path); pidx = self._path_idx
-            rx, ry, ryaw = self._x, self._y, self._yaw
-            gxy          = self._goal_xy; gdepth = self._goal_depth
+            active        = self._active; state = self._state
+            path          = list(self._path); pidx = self._path_idx
+            rx, ry, ryaw  = self._x, self._y, self._yaw
+            gxy           = self._goal_xy; gdepth = self._goal_depth
+            gcam_x        = self._goal_cam_x   # camera-frame lateral at click
+            off_frame      = self._goal_off_frame
 
         if not active: return
 
         self._odo.update(self._last_lin)
         driven = self._odo.driven_m
         gx, gy = gxy if gxy else (0.0, 0.0)
+        cam_fwd = self._sample_fwd_depth()
 
-        # ── Goal stop ─────────────────────────────────────────────────────
-        # Primary: odometer
+        # ── Goal stop — four criteria ──────────────────────────────────────
+        # 1. Primary: odometer
         odo_stop = gdepth is not None and driven >= (gdepth - GOAL_ODOMETER_MARGIN)
 
-        # Emergency: camera sees something very close ahead
-        cam_fwd  = self._sample_fwd_depth()
+        # 2. Goal off-frame stop.
+        #    Re-project goal into current camera frame to detect when it has
+        #    scrolled past the edge of the image as the rover approaches.
+        #    Strategy: compute the goal's current lateral angle relative to
+        #    the rover heading. If |angle| > half-FOV the goal is off-screen.
+        #    Once it goes off-screen we also check if it was previously ON-screen
+        #    (i.e. we drove toward it) AND we are close enough — then stop.
+        off_frame_stop = False
+        if gdepth is not None and gxy is not None and not off_frame:
+            # goal in rover body frame
+            dx_w = gx - rx; dy_w = gy - ry
+            goal_fwd  =  dx_w*math.cos(-ryaw) - dy_w*math.sin(-ryaw)
+            goal_lat  =  dx_w*math.sin(-ryaw) + dy_w*math.cos(-ryaw)
+            horiz_ang_deg = math.degrees(math.atan2(goal_lat, max(goal_fwd, 0.01)))
+            half_fov      = CAM_HFOV_DEG / 2.0        # 43.5°
+            # Mark off-frame once goal exits FOV
+            if abs(horiz_ang_deg) > half_fov:
+                with self._lock: self._goal_off_frame = True
+                off_frame_stop = True
+                print(f'[GOAL] off-frame at horiz={horiz_ang_deg:.1f}°  '                      f'cam_fwd={cam_fwd:.2f}m  driven={driven:.2f}m', flush=True)
+        elif off_frame:
+            # Already flagged off-frame on a previous tick — always stop now
+            off_frame_stop = True
+
+        # 3. Emergency: camera depth ahead is very small (nearly touching something)
         cam_stop = cam_fwd < GOAL_CAM_EMERGENCY_M
 
-        # Fallback: DR world distance
+        # 4. DR world distance fallback
         dist_dr  = math.hypot(gx-rx, gy-ry)
         dr_stop  = dist_dr < GOAL_DR_TOL_M
 
-        if odo_stop or cam_stop or dr_stop:
-            why = ('odometer' if odo_stop else
-                   'camera_emergency' if cam_stop else 'dead-reckoning')
-            print(f'[GOAL] REACHED ({why})  '
-                  f'driven={driven:.2f}m  cam={cam_fwd:.2f}m  dr={dist_dr:.2f}m',
+        if odo_stop or off_frame_stop or cam_stop or dr_stop:
+            why = ('odometer'    if odo_stop      else
+                   'off_frame'   if off_frame_stop else
+                   'cam_emerg'   if cam_stop       else 'dead-reckoning')
+            print(f'[GOAL] REACHED ({why})  '                  f'driven={driven:.2f}m  cam={cam_fwd:.2f}m  dr={dist_dr:.2f}m',
                   flush=True)
             self._arrive()
             return
@@ -857,3 +888,19 @@ def main(args=None):
 if __name__ == '__main__':
     main()
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  TUNING GUIDE
+#
+#  Still driving backwards?      → set REVERSE_LINEAR = False
+#  Still spinning instead of straight? → set RIGHT_FLIP_COMPENSATION = False
+#  Still oscillating left/right? → increase HEADING_DEADBAND_DEG (try 12-15)
+#                                   or decrease K_P (try 0.35)
+#                                   or increase K_D (try 0.12)
+#  Doesn't stop at goal?         → decrease GOAL_ODOMETER_MARGIN (try 0.20)
+#                                   [GOAL] log lines show driven_m vs depth
+#  Stops too early?              → increase GOAL_ODOMETER_MARGIN (try 0.55)
+#  Not turning enough?           → increase K_P (try 0.75)
+#                                   or decrease HEADING_DEADBAND_DEG (try 5)
+#  Turning too sharply?          → decrease K_P, increase LOOKAHEAD_M
+# ══════════════════════════════════════════════════════════════════════════════
