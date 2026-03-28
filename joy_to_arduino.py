@@ -1,72 +1,50 @@
 #!/usr/bin/env python3
 """
-joy_to_arduino.py  —  runs on the MINI PC
+joy_to_arduino.py  --  runs on the MINI PC
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TANK DRIVE LAYOUT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TANK DRIVE LAYOUT
+  Left  stick Y  (axis 1)  --  LEFT  wheels forward / backward
+  Right stick Y  (axis 4)  --  RIGHT wheels forward / backward
 
-  Left  stick Y  (axis 1)  ──  LEFT  wheels forward / backward
-  Right stick Y  (axis 4)  ──  RIGHT wheels forward / backward
+SPEED CONTROL  (independent per side)
+  LB (btn 4)  ->  LEFT  speed UP   (+5% per press, rising edge)
+  LT (axis 2) ->  LEFT  speed DOWN (-5% per press, rising edge)
+  RB (btn 5)  ->  RIGHT speed UP   (+5% per press, rising edge)
+  RT (axis 5) ->  RIGHT speed DOWN (-5% per press, rising edge)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  SPEED CONTROL  (independent per side)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTUATOR POSITION CONTROL  (encoder-based, buttons)
+  A (btn 0)  ->  DUMP position    (0xB3)
+  Y (btn 3)  ->  DRIVE position   (0xA9)
+  B (btn 1)  ->  DIG  position    (0xA7)
+  D-pad UP   ->  Actuator EXTEND  (hold to move, release to stop)
+  D-pad DOWN ->  Actuator RETRACT (hold to move, release to stop)
 
-  LB (btn 4)  →  LEFT  speed UP   (+5% per press, rising edge)
-  LT (axis 2) →  LEFT  speed DOWN (-5% per press, rising edge)
-  RB (btn 5)  →  RIGHT speed UP   (+5% per press, rising edge)
-  RT (axis 5) →  RIGHT speed DOWN (-5% per press, rising edge)
+SERVO CONTROL  (continuous 360 servo)
+  D-pad RIGHT  ->  CW  movement (angle 135) while held; STOP on release
+  D-pad LEFT   ->  CCW movement (angle  45) while held; STOP on release
 
-  Triggers fire on the FALLING edge (press), not while held.
+EMERGENCY STOP
+  Start (btn 7) -> toggle emergency stop
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ACTUATOR POSITION CONTROL  (encoder-based, buttons)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DELAY SIMULATION
+  /delay_enabled (Bool) -> toggle 5-second comms delay on/off
+  When ON:  all drive/actuator/servo commands held for 5 s before Arduino
+  /delay_status  (String, JSON) -> timer state published to laptop GUI
 
-  A (btn 0)  →  DUMP position    (0xB3)
-  Y (btn 3)  →  DRIVE position   (0xA9)
-  B (btn 1)  →  DIG  position    (0xA7)
-
-  D-pad UP   →  Actuator EXTEND  (hold → move, release → stop)
-  D-pad DOWN →  Actuator RETRACT (hold → move, release → stop)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  SERVO CONTROL  (continuous — 360° servo, no angle tracking)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  D-pad RIGHT  →  CW  movement  (angle 135) while held; STOP on release
-  D-pad LEFT   →  CCW movement  (angle  45) while held; STOP on release
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  EMERGENCY STOP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  Start (btn 7) →  toggle emergency stop
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ENCODER PERSISTENCE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  On startup, the node checks for a saved encoder count file
-  (~/.lunar_encoder_state.json).  If found it sends command 0xCB
-  to restore the last known actuator encoder value to the Arduino.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  SERIAL PROTOCOL  [0xAA][Device][Speed][Direction][0x55]
-    0x05  LEFT  side (FL + BL)
-    0x06  RIGHT side (FR + BR)
-    0x08  Both actuators (manual move)
-    0x11  Servo  (Speed = angle 45/90/135, Direction = 0x01)
-    0xA7  Actuator → DIG   position
-    0xA9  Actuator → DRIVE position
-    0xB3  Actuator → DUMP  position
-    0xCA  Calibrate actuator (retract to hard stop, zero encoder)
-    0xCB  Set encoder count  (Speed = high byte, Direction = low byte)
-    0xFF  STOP ALL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SERIAL PROTOCOL  [0xAA][Device][Speed][Direction][0x55]
+  0x05  LEFT  side (FL + BL)
+  0x06  RIGHT side (FR + BR)
+  0x08  Both actuators (manual move)
+  0x11  Servo  (Speed = angle 45/90/135, Direction = 0x01)
+  0xA7  Actuator -> DIG   position
+  0xA9  Actuator -> DRIVE position
+  0xB3  Actuator -> DUMP  position
+  0xCA  Calibrate actuator (retract to hard stop, zero encoder)
+  0xCB  Set encoder count  (Speed = high byte, Direction = low byte)
+  0xFF  STOP ALL
 """
 
+import collections
 import glob
 import json
 import os
@@ -78,8 +56,9 @@ from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 import serial
 
 # ── Serial protocol ───────────────────────────────────────────────────────
@@ -87,20 +66,18 @@ START       = 0xAA
 END         = 0x55
 ENC_MARKER  = 0xA5
 
-DEV_LEFT    = 0x05
-DEV_RIGHT   = 0x06
+DEV_LEFT    = 0x06
+DEV_RIGHT   = 0x05
 DEV_SERVO   = 0x11
-DEV_ACT     = 0x08   # manual actuator move
+DEV_ACT     = 0x08
 DEV_KILL    = 0xFF
 
-# Actuator position commands
 CMD_DIG     = 0xA7
 CMD_DRIVE   = 0xA9
 CMD_DUMP    = 0xB3
 CMD_CAL     = 0xCA
 CMD_SET_ENC = 0xCB
 
-# Servo angles
 SERVO_STOP  = 90
 SERVO_CCW   = 45
 SERVO_CW    = 135
@@ -111,31 +88,22 @@ SERVO_LOG_FILE     = Path.home() / 'lunar_servo_log.csv'
 ENCODER_LOG_FILE   = Path.home() / 'lunar_encoder_log.csv'
 
 # ── Controller mapping ────────────────────────────────────────────────────
-AXIS_LEFT   = 1   # Left  stick Y  → LEFT  wheels
-AXIS_RIGHT  = 4   # Right stick Y  → RIGHT wheels
+AXIS_LEFT   = 1
+AXIS_RIGHT  = 4
+AXIS_LT     = 2
+AXIS_RT     = 5
+TRIGGER_THRESHOLD = 0.5
 
-# Triggers: rest = +1.0, fully pressed = -1.0 on Xbox pads
-AXIS_LT     = 2   # Left  trigger  → LEFT  speed DOWN
-AXIS_RT     = 5   # Right trigger  → RIGHT speed DOWN
-# A trigger is "pressed" when axis drops below this threshold
-TRIGGER_THRESHOLD = 0.5   # axis < (1.0 - 0.5) = 0.5 means pressed
-
-# Bumpers
-BTN_LB      = 4   # LEFT  speed UP
-BTN_RB      = 5   # RIGHT speed UP
-
-# Actuator position buttons
-BTN_A       = 0   # → DUMP  position
-BTN_Y       = 3   # → DRIVE position
-BTN_B       = 1   # → DIG   position
-BTN_X       = 2   # → CALIBRATE
-
-# Emergency stop
+BTN_LB      = 4
+BTN_RB      = 5
+BTN_A       = 0
+BTN_Y       = 3
+BTN_B       = 1
+BTN_X       = 2
 BTN_START   = 7
 
-# D-pad axes (standard Xbox USB on Linux)
-DPAD_AXIS_LR = 6   # -1 = left, +1 = right  → SERVO
-DPAD_AXIS_UD = 7   # +1 = up,   -1 = down    → ACTUATOR manual move
+DPAD_AXIS_LR = 6
+DPAD_AXIS_UD = 7
 
 # ── Tuning ────────────────────────────────────────────────────────────────
 RIGHT_FLIP      = True
@@ -146,7 +114,7 @@ MIN_SERIAL_GAP  = 1.0 / MAX_SERIAL_HZ
 SPEED_START     = 1.0
 SPEED_STEP      = 0.05
 JOY_TIMEOUT     = 0.5
-ACT_MANUAL_SPD  = 200   # PWM speed for manual d-pad actuator moves
+ACT_MANUAL_SPD  = 200
 
 # ── Telemetry parse states ────────────────────────────────────────────────
 _TELEM_START = 0
@@ -156,9 +124,9 @@ _TELEM_ENC   = 3
 _TELEM_CHK   = 4
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 #  PERSISTENCE HELPERS
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 def load_encoder_state() -> dict:
     try:
@@ -177,9 +145,9 @@ def save_encoder_state(enc_count: int) -> None:
         print(f'[encoder_state] save failed: {e}')
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 #  SERVO LOG
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 class ServoLog:
     def __init__(self):
@@ -235,9 +203,9 @@ class ServoLog:
             return self._cumulative + extra
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 #  ENCODER LOG
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 class EncoderLog:
     def __init__(self):
@@ -251,9 +219,9 @@ class EncoderLog:
             f.write(f'{ts},{event},{count}\n')
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 #  TELEMETRY READER
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 class TelemetryReader(threading.Thread):
     def __init__(self, port: str, on_encoder_cb, logger=None):
@@ -276,9 +244,9 @@ class TelemetryReader(threading.Thread):
     def run(self):
         if not self.connected:
             return
-        state = _TELEM_START
-        imu_buf = bytearray()
-        enc_buf = bytearray()
+        state    = _TELEM_START
+        imu_buf  = bytearray()
+        enc_buf  = bytearray()
         chk_calc = 0
         while self._running:
             try:
@@ -291,9 +259,9 @@ class TelemetryReader(threading.Thread):
             byte = b[0]
             if state == _TELEM_START:
                 if byte == START:
-                    state = _TELEM_IMU
-                    imu_buf = bytearray()
-                    enc_buf = bytearray()
+                    state    = _TELEM_IMU
+                    imu_buf  = bytearray()
+                    enc_buf  = bytearray()
                     chk_calc = 0
             elif state == _TELEM_IMU:
                 imu_buf.append(byte)
@@ -326,21 +294,21 @@ class TelemetryReader(threading.Thread):
                 pass
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 #  ROS NODE
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 class JoyToArduino(Node):
 
     def __init__(self, cmd_port: str, telem_port):
         super().__init__('joy_to_arduino')
 
-        self._ser   = None
-        self._lock  = threading.Lock()
-        self._port  = cmd_port
-        self._connect(cmd_port)
+        self._ser  = None
+        self._lock = threading.Lock()
+        self._port = cmd_port
+        self._connect(cmd_port)   # open serial first -- everything below may use it
 
-        # Independent per-side speed multipliers
+        # Speed multipliers
         self._speed_left  = SPEED_START
         self._speed_right = SPEED_START
 
@@ -350,19 +318,16 @@ class JoyToArduino(Node):
         self._joy_count   = 0
 
         # D-pad edge detection
-        self._prev_dpad_lr  = 0.0
-        self._prev_dpad_ud  = 0.0
-        self._servo_moving  = False
-        self._servo_dir     = ''
-        self._act_moving    = False   # True while d-pad UD held
+        self._prev_dpad_lr = 0.0
+        self._prev_dpad_ud = 0.0
+        self._servo_moving = False
+        self._servo_dir    = ''
+        self._act_moving   = False
 
-        # ── TRIGGER EDGE DETECTION ────────────────────────────────────────
-        # We track the PREVIOUS raw axis value so we fire exactly once
-        # per press (falling edge: value drops below threshold).
-        self._lt_prev = 1.0   # rest position for LT
-        self._rt_prev = 1.0   # rest position for RT
+        self._lt_prev = 1.0
+        self._rt_prev = 1.0
 
-        # Last sent motor state
+        # Rate-limiting state
         self._last_left  = (0, 0)
         self._last_right = (0, 0)
         self._last_write = 0.0
@@ -375,7 +340,24 @@ class JoyToArduino(Node):
         self._servo_log   = ServoLog()
         self._encoder_log = EncoderLog()
 
-        # Restore encoder state
+        # ── Delay simulation ─────────────────────────────────────────────
+        # Delay OFF:  _send() writes to serial immediately.
+        # Delay ON:   _send() timestamps and queues the packet.
+        #             _flush_delay_queue() (20 Hz ROS timer) pops and
+        #             writes packets whose age >= _delay_sec.
+        # No external dependency -- just a collections.deque + a timer.
+        self._delay_enabled = False
+        self._delay_sec     = 5.0
+        self._delay_queue   = collections.deque()   # (enqueue_time, pkt_bytes)
+        self._delay_lock    = threading.Lock()
+        self._last_cmd_t    = None   # monotonic time of last _send(), for GUI
+
+        _rel = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST, depth=10)
+        # ─────────────────────────────────────────────────────────────────
+
+        # Restore encoder state -- _send() fully works at this point
         saved = load_encoder_state()
         if saved:
             restored = saved.get('encoder_count')
@@ -399,12 +381,57 @@ class JoyToArduino(Node):
             if self._telem_reader.connected:
                 self.get_logger().info(f'Telemetry reader connected on {telem_port}')
 
-        self.create_subscription(Joy,  '/joy',            self._joy_cb,   10)
-        self.create_subscription(Bool, '/emergency_stop', self._estop_cb, 10)
-        self.create_timer(0.1, self._watchdog)
-        self.create_timer(5.0, self._diagnostics)
+        self.create_subscription(Joy,  '/joy',            self._joy_cb,         10)
+        self.create_subscription(Bool, '/emergency_stop', self._estop_cb,        10)
+        self.create_subscription(Bool, '/delay_enabled',  self._delay_toggle_cb, _rel)
+        self._delay_pub = self.create_publisher(String, '/delay_status', _rel)
+
+        self.create_timer(0.05, self._flush_delay_queue)   # 20 Hz drain
+        self.create_timer(0.1,  self._watchdog)
+        self.create_timer(0.1,  self._publish_delay_status)
+        self.create_timer(5.0,  self._diagnostics)
 
         self._banner()
+
+    # ── Delay methods ─────────────────────────────────────────────────────
+
+    def _delay_toggle_cb(self, msg: Bool):
+        self._delay_enabled = msg.data
+        state = 'ENABLED' if msg.data else 'DISABLED'
+        self.get_logger().info(f'Communication delay {state}')
+        if not msg.data:
+            # Flush queue immediately when delay is turned off
+            with self._delay_lock:
+                while self._delay_queue:
+                    _, pkt = self._delay_queue.popleft()
+                    self._raw_serial_write(pkt)
+
+    def _flush_delay_queue(self):
+        """20 Hz ROS timer: releases queued packets once their hold time expires."""
+        if not self._delay_enabled:
+            return
+        now = time.monotonic()
+        with self._delay_lock:
+            while self._delay_queue:
+                enqueue_t, pkt = self._delay_queue[0]
+                if now - enqueue_t < self._delay_sec:
+                    break
+                self._delay_queue.popleft()
+                self._raw_serial_write(pkt)
+
+    def _publish_delay_status(self):
+        now     = time.monotonic()
+        elapsed = (now - self._last_cmd_t) if self._last_cmd_t is not None else None
+        with self._delay_lock:
+            pending = len(self._delay_queue)
+        m      = String()
+        m.data = json.dumps({
+            'delay_enabled': self._delay_enabled,
+            'delay_sec':     self._delay_sec,
+            'last_cmd_age':  round(elapsed, 2) if elapsed is not None else None,
+            'pending':       pending,
+        })
+        self._delay_pub.publish(m)
 
     # ── Banner ────────────────────────────────────────────────────────────
 
@@ -429,21 +456,35 @@ class JoyToArduino(Node):
             self._ser = serial.Serial(port, 115200, timeout=1.0)
             time.sleep(2.0)
             self._ser.reset_input_buffer()
-            self.get_logger().info(f'✓ Arduino (cmd) connected: {port}')
+            self.get_logger().info(f'Arduino (cmd) connected: {port}')
         except serial.SerialException as e:
-            self.get_logger().error(f'✗ Serial open failed: {e}')
+            self.get_logger().error(f'Serial open failed: {e}')
             self._ser = None
 
-    def _send(self, device: int, speed: int, direction: int):
-        pkt = bytes([START, device, speed & 0xFF, direction & 0xFF, END])
-        print(f'[TX] AA {device:02X} {speed & 0xFF:02X} {direction & 0xFF:02X} 55',
-              flush=True)
+    def _raw_serial_write(self, pkt: bytes):
+        """Write a pre-built packet directly to serial. Never queued."""
+        print(f'[TX] {" ".join(f"{b:02X}" for b in pkt)}', flush=True)
         if self._ser and self._ser.is_open:
             try:
                 self._ser.write(pkt)
             except serial.SerialException as e:
                 self.get_logger().error(f'Serial write error: {e}')
                 self._ser = None
+
+    def _send(self, device: int, speed: int, direction: int):
+        """
+        Send one command to the Arduino.
+        Delay OFF: writes to serial immediately.
+        Delay ON:  queues the packet for _delay_sec seconds.
+        Updates _last_cmd_t for the GUI timer in both cases.
+        """
+        pkt = bytes([START, device, speed & 0xFF, direction & 0xFF, END])
+        self._last_cmd_t = time.monotonic()
+        if self._delay_enabled:
+            with self._delay_lock:
+                self._delay_queue.append((self._last_cmd_t, pkt))
+        else:
+            self._raw_serial_write(pkt)
 
     def _stop_all(self):
         with self._lock:
@@ -474,12 +515,10 @@ class JoyToArduino(Node):
         return (spd, d)
 
     def _set_drive(self, left_f: float, right_f: float):
-        l = self._to_sd(left_f,  flip=False)
-        r = self._to_sd(right_f, flip=RIGHT_FLIP)
-        now     = time.monotonic()
-        changed = (l != self._last_left or r != self._last_right)
-        rate_ok = (now - self._last_write) >= MIN_SERIAL_GAP
-        if changed and rate_ok:
+        l   = self._to_sd(left_f,  flip=False)
+        r   = self._to_sd(right_f, flip=RIGHT_FLIP)
+        now = time.monotonic()
+        if (now - self._last_write) >= MIN_SERIAL_GAP:
             with self._lock:
                 self._send(DEV_LEFT,  l[0], l[1])
                 self._send(DEV_RIGHT, r[0], r[1])
@@ -523,7 +562,7 @@ class JoyToArduino(Node):
         with self._lock:
             self._send(cmd, 0, 0)
         self._encoder_log.log(f'CMD_{name}', current_enc)
-        self.get_logger().info(f'Actuator → {name}  (encoder ~{current_enc})')
+        self.get_logger().info(f'Actuator -> {name}  (encoder ~{current_enc})')
 
     # ── Edge detection ────────────────────────────────────────────────────
 
@@ -563,65 +602,61 @@ class JoyToArduino(Node):
         if self._emergency:
             for b in (BTN_LB, BTN_RB, BTN_A, BTN_Y, BTN_B, BTN_X):
                 self._prev_btns[b] = btn(b)
-            self._prev_dpad_lr  = ax(DPAD_AXIS_LR)
-            self._prev_dpad_ud  = ax(DPAD_AXIS_UD)
-            self._lt_prev       = ax(AXIS_LT)
-            self._rt_prev       = ax(AXIS_RT)
+            self._prev_dpad_lr = ax(DPAD_AXIS_LR)
+            self._prev_dpad_ud = ax(DPAD_AXIS_UD)
+            self._lt_prev      = ax(AXIS_LT)
+            self._rt_prev      = ax(AXIS_RT)
             return
 
-        # ── Speed control — LB/RB bumpers (rising edge) ───────────────────
+        # ── Speed control -- LB/RB bumpers (rising edge) ─────────────────
         if self._rising(BTN_LB, btn(BTN_LB)):
             self._speed_left = round(min(1.0, self._speed_left + SPEED_STEP), 2)
-            print(f'[BTN LB] LEFT speed UP → {self._speed_left:.2f}', flush=True)
+            print(f'[BTN LB] LEFT speed UP -> {self._speed_left:.2f}', flush=True)
             self.get_logger().info(f'LEFT  speed: {self._speed_left:.2f}')
 
         if self._rising(BTN_RB, btn(BTN_RB)):
             self._speed_right = round(min(1.0, self._speed_right + SPEED_STEP), 2)
-            print(f'[BTN RB] RIGHT speed UP → {self._speed_right:.2f}', flush=True)
+            print(f'[BTN RB] RIGHT speed UP -> {self._speed_right:.2f}', flush=True)
             self.get_logger().info(f'RIGHT speed: {self._speed_right:.2f}')
 
-        # ── Speed control — LT trigger (falling-edge detection) ───────────
-        # Axis rests at +1.0, goes to -1.0 when fully pressed.
-        # "Pressed" = axis < TRIGGER_THRESHOLD (0.5).
-        # We fire ONCE when it crosses the threshold going down.
-        lt_cur = ax(AXIS_LT)
+        # ── Speed control -- LT trigger (falling-edge detection) ──────────
+        lt_cur         = ax(AXIS_LT)
         lt_pressed_now = lt_cur < TRIGGER_THRESHOLD
         lt_was_pressed = self._lt_prev < TRIGGER_THRESHOLD
         if lt_pressed_now and not lt_was_pressed:
-            # Falling edge — LT just crossed into pressed territory
             self._speed_left = round(max(0.05, self._speed_left - SPEED_STEP), 2)
-            print(f'[LT={lt_cur:+.2f}] LEFT speed DOWN → {self._speed_left:.2f}',
+            print(f'[LT={lt_cur:+.2f}] LEFT speed DOWN -> {self._speed_left:.2f}',
                   flush=True)
             self.get_logger().info(f'LEFT  speed: {self._speed_left:.2f}')
         self._lt_prev = lt_cur
 
-        # ── Speed control — RT trigger (falling-edge detection) ───────────
-        rt_cur = ax(AXIS_RT)
+        # ── Speed control -- RT trigger (falling-edge detection) ──────────
+        rt_cur         = ax(AXIS_RT)
         rt_pressed_now = rt_cur < TRIGGER_THRESHOLD
         rt_was_pressed = self._rt_prev < TRIGGER_THRESHOLD
         if rt_pressed_now and not rt_was_pressed:
             self._speed_right = round(max(0.05, self._speed_right - SPEED_STEP), 2)
-            print(f'[RT={rt_cur:+.2f}] RIGHT speed DOWN → {self._speed_right:.2f}',
+            print(f'[RT={rt_cur:+.2f}] RIGHT speed DOWN -> {self._speed_right:.2f}',
                   flush=True)
             self.get_logger().info(f'RIGHT speed: {self._speed_right:.2f}')
         self._rt_prev = rt_cur
 
         # ── Actuator position commands (A / Y / B / X) ───────────────────
         if self._rising(BTN_A, btn(BTN_A)):
-            print('[BTN A] → DUMP (0xB3)', flush=True)
-            self._actuator_position(CMD_DUMP,  'DUMP')
+            print('[BTN A] -> DUMP (0xB3)', flush=True)
+            self._actuator_position(CMD_DUMP, 'DUMP')
 
         if self._rising(BTN_Y, btn(BTN_Y)):
-            print('[BTN Y] → DRIVE (0xA9)', flush=True)
+            print('[BTN Y] -> DRIVE (0xA9)', flush=True)
             self._actuator_position(CMD_DRIVE, 'DRIVE')
 
         if self._rising(BTN_B, btn(BTN_B)):
-            print('[BTN B] → DIG (0xA7)', flush=True)
-            self._actuator_position(CMD_DIG,   'DIG')
+            print('[BTN B] -> DIG (0xA7)', flush=True)
+            self._actuator_position(CMD_DIG, 'DIG')
 
         if self._rising(BTN_X, btn(BTN_X)):
-            print('[BTN X] → CALIBRATE (0xCA)', flush=True)
-            self.get_logger().warn('Actuator CALIBRATE — retracting to hard stop')
+            print('[BTN X] -> CALIBRATE (0xCA)', flush=True)
+            self.get_logger().warn('Actuator CALIBRATE -- retracting to hard stop')
             with self._lock:
                 self._send(CMD_CAL, 0, 0)
             with self._enc_lock:
@@ -629,37 +664,34 @@ class JoyToArduino(Node):
             save_encoder_state(0)
             self._encoder_log.log('CALIBRATE', 0)
 
-        # ── D-pad LEFT/RIGHT → Servo (hold = move, release = stop) ───────
+        # ── D-pad LEFT/RIGHT -> Servo (hold to move, release to stop) ────
         cur_lr = ax(DPAD_AXIS_LR)
         if cur_lr > 0.5 and self._prev_dpad_lr <= 0.5:
-            print('[DPAD →] Servo CW', flush=True)
+            print('[DPAD ->] Servo CW', flush=True)
             self._servo_start(SERVO_CW, 'CW')
         elif cur_lr < -0.5 and self._prev_dpad_lr >= -0.5:
-            print('[DPAD ←] Servo CCW', flush=True)
+            print('[DPAD <-] Servo CCW', flush=True)
             self._servo_start(SERVO_CCW, 'CCW')
         elif abs(cur_lr) < 0.5 and abs(self._prev_dpad_lr) > 0.5:
             print('[DPAD LR release] Servo STOP', flush=True)
             self._servo_stop()
         self._prev_dpad_lr = cur_lr
 
-        # ── D-pad UP/DOWN → Actuator manual move (hold = move, release = stop) ──
+        # ── D-pad UP/DOWN -> Actuator manual (hold to move, release to stop)
         cur_ud = ax(DPAD_AXIS_UD)
 
-        # UP (+1) → extend
         if cur_ud > 0.5 and self._prev_dpad_ud <= 0.5:
-            print('[DPAD ↑] Actuator EXTEND (manual hold)', flush=True)
+            print('[DPAD up] Actuator EXTEND (manual hold)', flush=True)
             with self._lock:
-                self._send(DEV_ACT, ACT_MANUAL_SPD, 0)   # direction 0 = extend
+                self._send(DEV_ACT, ACT_MANUAL_SPD, 0)
             self._act_moving = True
 
-        # DOWN (-1) → retract
         elif cur_ud < -0.5 and self._prev_dpad_ud >= -0.5:
-            print('[DPAD ↓] Actuator RETRACT (manual hold)', flush=True)
+            print('[DPAD down] Actuator RETRACT (manual hold)', flush=True)
             with self._lock:
-                self._send(DEV_ACT, ACT_MANUAL_SPD, 1)   # direction 1 = retract
+                self._send(DEV_ACT, ACT_MANUAL_SPD, 1)
             self._act_moving = True
 
-        # Released back to neutral → stop actuator
         elif abs(cur_ud) < 0.5 and abs(self._prev_dpad_ud) > 0.5:
             print('[DPAD UD release] Actuator STOP', flush=True)
             with self._lock:
@@ -702,18 +734,21 @@ class JoyToArduino(Node):
         elapsed   = (self.get_clock().now() - self._last_joy).nanoseconds / 1e9
         with self._enc_lock:
             enc = self._enc_count
+        with self._delay_lock:
+            pending = len(self._delay_queue)
         msg = (
             f'[DIAG] serial={serial_ok}  joy={self._joy_count}/5s  '
             f'last_joy={elapsed:.1f}s  '
             f'spd_L={self._speed_left:.2f}  spd_R={self._speed_right:.2f}  '
-            f'enc={enc}  servo={self._servo_moving}({self._servo_dir})  '
+            f'enc={enc}  delay={self._delay_enabled}(pending={pending})  '
+            f'servo={self._servo_moving}({self._servo_dir})  '
             f'act_manual={self._act_moving}  estop={self._emergency}'
         )
         self.get_logger().info(msg)
         print(msg, flush=True)
         if self._joy_count == 0:
             self.get_logger().warn(
-                '⚠ No /joy messages — is joy_node running? '
+                'No /joy messages -- is joy_node running? '
                 'ros2 topic echo /joy')
         self._joy_count = 0
 
@@ -724,10 +759,10 @@ class JoyToArduino(Node):
             self._emergency = True
             self._stop_all()
             self._servo_stop()
-            self.get_logger().error('⬛ EMERGENCY STOP (topic)')
+            self.get_logger().error('EMERGENCY STOP (topic)')
         else:
             self._emergency = False
-            self.get_logger().info('✓ E-stop cleared (topic)')
+            self.get_logger().info('E-stop cleared (topic)')
 
     # ── Cleanup ───────────────────────────────────────────────────────────
 
@@ -741,9 +776,9 @@ class JoyToArduino(Node):
         super().destroy_node()
 
 
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 #  ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
 
 def main(args=None):
     rclpy.init(args=args)
