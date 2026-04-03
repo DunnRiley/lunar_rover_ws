@@ -516,7 +516,7 @@ class JoyToArduino(Node):
 
     def _set_drive(self, left_f: float, right_f: float):
         l   = self._to_sd(left_f,  flip=False)
-        r   = self._to_sd(right_f, flip=RIGHT_FLIP)
+        r   = self._to_sd(right_f, flip=False)
         now = time.monotonic()
         if (now - self._last_write) >= MIN_SERIAL_GAP:
             with self._lock:
