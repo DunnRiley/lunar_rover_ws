@@ -47,35 +47,17 @@ mission:
 
   steps:
 
-    # ── Phase 1: Approach ──────────────────────────────────────────────────
-    - action: drive_forward
-      params:
-        distance_m: 1436
-        use_camera: true       # camera tracks how far we've closed on the dig zone
-        timeout_s: 25
-
-    - action: wait
-      params:
-        seconds: 0.5           # brief settle before actuator move
-
-    # ── Phase 2: Lower bucket to dig position ──────────────────────────────
+    # ── Start Cal actuators ────────────────
     - action: actuator_position
       params:
-        target: dig
-        timeout_s: 8           # Arduino moves actuator to dig encoder preset
+        target: dump
+        timeout_s: 8
 
     - action: wait
       params:
-        seconds: 1.0
+        seconds: 0.5
 
-    # ── Phase 3: Drive through the dig zone (encoder-only — camera may be buried)
-    - action: drive_forward
-      params:
-        distance_m: 0.8
-        use_camera: false      # use encoder only — bucket may be in view
-        timeout_s: 15
-
-    # ── Phase 4: Raise actuator to drive/transport position ────────────────
+    # ── Phase 1: set actuators to drive ────────────────
     - action: actuator_position
       params:
         target: drive
@@ -85,82 +67,130 @@ mission:
       params:
         seconds: 0.5
 
-    # ── Phase 5: Navigate back toward the dump zone ────────────────────────
-    # Turn 180° to face dump zone
-    - action: arc_turn
+
+    # ── Phase 2: Approach ──────────────────────────────────────────────────
+    - action: drive_backward
       params:
-        degrees: 180
-        speed: 0.18
-        tolerance_deg: 5       # 5° tolerance — loose enough to not fight the IMU drift
-        timeout_s: 30
+        distance_m: 0.5
+        use_camera: false       # camera tracks how far we've closed on the dig zone
+        timeout_s: 25
 
     - action: wait
       params:
-        seconds: 0.3
+        seconds: 0.5           # brief settle before actuator move
 
-    # Drive to dump zone (camera tracking)
-    - action: drive_forward
-      params:
-        distance_m: 3.0
-        use_camera: true
-        timeout_s: 35
-
-    # ── Phase 6: Dump ──────────────────────────────────────────────────────
+    # ── Phase 3: Dig ────────────────
     - action: actuator_position
       params:
-        target: dump
+        target: dig
         timeout_s: 8
 
     - action: wait
       params:
-        seconds: 2.0           # let material dump
+        seconds: 0.5
 
-    # ── Phase 7: Reset to drive position and clear the zone ────────────────
+    # ── Phase 4: Drive through the dig zone 
+    - action: drive_backward
+      params:
+        distance_m: 1.0
+        use_camera: false      # use encoder only — bucket may be in view
+        timeout_s: 15
+
+    # ── Phase 5: Raise actuator to drive/transport position ────────────────
     - action: actuator_position
       params:
         target: drive
         timeout_s: 8
 
-    - action: arc_turn
+    - action: wait
       params:
-        degrees: 90
-        speed: 0.15
-        timeout_s: 20
-
-    - action: drive_forward
-      params:
-        distance_m: 0.5
-        use_camera: false
-        timeout_s: 10
-
-    - action: stop
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- ADDITIONAL EXAMPLE — simple test sequence to calibrate sensors
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-mission:
-  name: "Calibration run"
-  steps:
+        seconds: 0.5
+      
+    # ── Phase 6: Drive 
     - action: drive_forward
       params:
         distance_m: 1.0
-        use_camera: false
+        use_camera: false      # use encoder only — bucket may be in view
         timeout_s: 15
-    - action: wait
-      params:
-        seconds: 2.0
-    # Check /nav/dist_driven — should read ~1.0m
-    # If it reads 0.87m, set ENC_COUNTS_PER_METRE = current_value * (1.0/0.87)
 
-    - action: arc_turn
-      params:
-        degrees: 90
-        timeout_s: 15
-    - action: wait
-      params:
-        seconds: 2.0
-    # Check /nav/heading_deg — should read ~90°
-    # If it reads 83°, rover underestimates turns — increase GYRO_YAW_SIGN
-    # or check GYRO_YAW_INDEX matches your IMU mounting orientation
+
+
+    # # ── Phase 5: Navigate back toward the dump zone ────────────────────────
+    # # Turn 180° to face dump zone
+    # - action: arc_turn
+    #   params:
+    #     degrees: 180
+    #     speed: 0.18
+    #     tolerance_deg: 5       # 5° tolerance — loose enough to not fight the IMU drift
+    #     timeout_s: 30
+
+    # - action: wait
+    #   params:
+    #     seconds: 0.3
+
+    # # Drive to dump zone (camera tracking)
+    # - action: drive_forward
+    #   params:
+    #     distance_m: 3.0
+    #     use_camera: true
+    #     timeout_s: 35
+
+    # # ── Phase 6: Dump ──────────────────────────────────────────────────────
+    # - action: actuator_position
+    #   params:
+    #     target: dump
+    #     timeout_s: 8
+
+    # - action: wait
+    #   params:
+    #     seconds: 2.0           # let material dump
+
+    # # ── Phase 7: Reset to drive position and clear the zone ────────────────
+    # - action: actuator_position
+    #   params:
+    #     target: drive
+    #     timeout_s: 8
+
+    # - action: arc_turn
+    #   params:
+    #     degrees: 90
+    #     speed: 0.15
+    #     timeout_s: 20
+
+    # - action: drive_forward
+    #   params:
+    #     distance_m: 0.5
+    #     use_camera: false
+    #     timeout_s: 10
+
+    # - action: stop
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  ADDITIONAL EXAMPLE — simple test sequence to calibrate sensors
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# mission:
+#   name: "Calibration run"
+#   steps:
+#     - action: drive_forward
+#       params:
+#         distance_m: 1.0
+#         use_camera: false
+#         timeout_s: 15
+#     - action: wait
+#       params:
+#         seconds: 2.0
+#     # Check /nav/dist_driven — should read ~1.0m
+#     # If it reads 0.87m, set ENC_COUNTS_PER_METRE = current_value * (1.0/0.87)
+
+#     - action: arc_turn
+#       params:
+#         degrees: 90
+#         timeout_s: 15
+#     - action: wait
+#       params:
+#         seconds: 2.0
+#     # Check /nav/heading_deg — should read ~90°
+#     # If it reads 83°, rover underestimates turns — increase GYRO_YAW_SIGN
+#     # or check GYRO_YAW_INDEX matches your IMU mounting orientation

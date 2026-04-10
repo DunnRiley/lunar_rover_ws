@@ -53,8 +53,7 @@ const uint8_t BackLeftEncoder_CS   = 33;   // change if BL is actually wired els
 const uint8_t START = 0xAA;
 const uint8_t END   = 0x55;
 const uint8_t ENC   = 0xA5;
-
-uint8_t data[3];
+uint8_t data[5];
 uint8_t idx = 0;
 
 enum RxState { WAIT_START, READ_DATA, WAIT_END };
@@ -107,16 +106,34 @@ bool invertRightDriveDirection = true;
 static uint16_t blPrevAngle = 0;
 static int32_t  blPosition  = 0;
 
-enum DriveDistState { DD_IDLE, DD_RUNNING };
-static DriveDistState ddState        = DD_IDLE;
+static uint16_t brPrevAngle = 0;
+static int32_t  brPosition  = 0;
+
+enum DriveDistState { DD_IDLE, DD_RUNNING};
+static DriveDistState ddStatebl        = DD_IDLE;
+static DriveDistState ddStatebr        = DD_IDLE;
 static int32_t        ddStartBL      = 0;
-static int32_t        ddTargetCounts = 0;
-static uint8_t        ddDirection    = 0;  // 0 = forward, 1 = reverse
-unsigned long         ddStartMs      = 0;
-const unsigned long   DD_TIMEOUT_MS  = 15000;
+static int32_t        ddStartBR      = 0;
+static int32_t        ddTargetCountsbl = 0;
+static int32_t        ddTargetCountsbr = 0;
+static uint8_t        ddDirectionbl = 0;
+static uint8_t        ddDirectionbr = 0;  // 0 = forward, 1 = reverse
+uint8_t ddspeedbr = 0;
+uint8_t ddspeedbl = 0;
+bool ddblcont = false;
+bool ddbrcont = false;
+float kp = 0.5; 
+unsigned long         ddStartMsbl      = 0;
+unsigned long         ddStartMsbr      = 0;
+
+const unsigned long   DD_TIMEOUT_MS  = 30000;
+
+enum EncodCommandState {IDLE, DUAL, DIFFERNTIALSTOP, CONTINUE};
+static EncodCommandState autodrive = IDLE;
+bool continuedrive = false;
 
 // ── Function prototypes ──────────────────────────────────────────────────
-void HandleInput(uint8_t device, uint8_t speed, uint8_t direction);
+void HandleInput(uint8_t device, uint8_t speed, uint8_t direction, uint8_t lobyte, uint8_t chksum);
 void MotorDriving(uint8_t pwmPin, uint8_t speed, uint8_t direction, uint8_t dirPin);
 void DriveLeft(uint8_t speed, uint8_t direction);
 void DriveRight(uint8_t speed, uint8_t direction);
@@ -153,7 +170,7 @@ uint16_t readAS5048A(uint8_t csPin);
 int16_t angleDelta14(uint16_t newAngle, uint16_t oldAngle);
 void zeroBLEncoder();
 void updateBLEncoder();
-void updateDriveDistance();
+void updateDriveDistancebl();
 
 void setup() {
   pinMode(53, OUTPUT);
@@ -202,9 +219,6 @@ void setup() {
 }
 
 void loop() {
-  updateBLEncoder();
-  updateDriveDistance();
-
   while (Serial.available() > 0) {
     uint8_t b = (uint8_t)Serial.read();
     rxLastByteMs = millis();
@@ -219,13 +233,13 @@ void loop() {
 
       case READ_DATA:
         data[idx++] = b;
-        if (idx >= 3) rxState = WAIT_END;
+        if (idx >= 5) rxState = WAIT_END;
         break;
 
       case WAIT_END:
         if (b == END) {
           Serial.write(0xAA);
-          HandleInput(data[0], data[1], data[2]);
+          HandleInput(data[0], data[1], data[2],data[3], data[4]);
           rxState = WAIT_START;
         } else if (b == START) {
           idx = 0;
@@ -238,6 +252,27 @@ void loop() {
   if (rxState != WAIT_START && (millis() - rxLastByteMs) > RX_TIMEOUT_MS) {
     rxState = WAIT_START;
     idx = 0;
+  }
+  updateBLEncoder();
+  updateBREncoder();
+  switch (autodrive){
+    case IDLE:
+      break;
+    case DUAL:
+      dualdrive();
+      break;
+    case DIFFERNTIALSTOP:
+      continuedrive = false;
+      updateDriveDistancebr();
+      updateDriveDistancebl();
+      break;
+    case CONTINUE:
+      continuedrive = true;
+      updateDriveDistancebr();
+      updateDriveDistancebl();
+      break;
+    default:
+      STOPALL();
   }
 
   switch (actuatorState) {
@@ -303,33 +338,103 @@ void zeroBLEncoder() {
   blPosition = 0;
 }
 
+void zeroBREncoder(){
+  brPrevAngle = readAS5048A(BackRightEncoder_CS);
+  brPosition = 0;
+}
+
 void updateBLEncoder() {
   uint16_t blAngle = readAS5048A(BackLeftEncoder_CS);
   blPosition += angleDelta14(blAngle, blPrevAngle);
   blPrevAngle = blAngle;
 }
 
-void updateDriveDistance() {
-  if (ddState != DD_RUNNING) return;
+void updateBREncoder() {
+  uint16_t brAngle = readAS5048A(BackRightEncoder_CS);
+  brPosition += angleDelta14(brAngle, brPrevAngle);
+  brPrevAngle = brAngle;
+}
+
+void dualdrive() {
+  if (ddStatebr != DD_RUNNING || ddStatebl != DD_RUNNING) return;
+
+  int32_t travelBR = brPosition - ddStartBR;
+  int32_t travelBL = blPosition - ddStartBL;
+
+  if (travelBR < 0) travelBR = -travelBR;
+  if (travelBL < 0) travelBL = -travelBL;
+
+//  int32_t error = travelBR - travelBL;
+//  int correction = (int)(kp * error);
+//  correction = constrain(correction, -40, 40);
+//
+//  int rightPWM = ddspeedbr - correction;
+//  int leftPWM  = ddspeedbl + correction;
+//
+//  rightPWM = constrain(rightPWM, 0, 255);
+//  leftPWM  = constrain(leftPWM, 0, 255);
+//
+//  dualDriveLeft((uint8_t)leftPWM, ddDirectionbl);
+//  dualDriveRight((uint8_t)rightPWM, ddDirectionbr);
+
+  if (travelBR >= ddTargetCountsbr || travelBL >= ddTargetCountsbl) {
+    STOPALL();
+  }
+}
+
+void updateDriveDistancebr(){
+  if (ddStatebr != DD_RUNNING) return;
+  int32_t travelBR = brPosition - ddStartBR;
+  if (travelBR < 0) travelBR = -travelBR;
+  if (travelBR >= ddTargetCountsbr) {
+    ddbrcont = false;
+    if (continuedrive && ddblcont){
+      return;
+    }
+    else if(!ddbrcont && !ddblcont) {
+      STOPALL();
+      ddStatebr = DD_IDLE;
+      return;
+    }
+    else if (!ddbrcont && !continuedrive){
+      DriveRight(0,0);
+      ddStatebr = DD_IDLE;
+      return;
+    }
+    ddStatebr = DD_IDLE;
+    STOPALL();
+    return;
+  }
+}
+
+void updateDriveDistancebl() {
+  if (ddStatebl != DD_RUNNING) return;
 
   int32_t travelBL = blPosition - ddStartBL;
   if (travelBL < 0) travelBL = -travelBL;
 
-  if (travelBL >= ddTargetCounts) {
+  if (travelBL >= ddTargetCountsbl) {
+    ddblcont = false;
+    if (continuedrive && ddbrcont){
+      return;
+    }
+    else if (!ddbrcont && !ddblcont){
+      STOPALL();
+      ddStatebl = DD_IDLE;
+      return;
+    }
+    else if (!ddblcont && !continuedrive){
+      DriveLeft(0,0);
+      ddStatebl = DD_IDLE;
+      return;
+    }
+    ddStatebl = DD_IDLE;
     STOPALL();
-    Serial.print("DIST_DONE BL travel counts = ");
-    Serial.print(travelBL);
-    Serial.print("  target = ");
-    Serial.println(ddTargetCounts);
     return;
   }
 
-  if (millis() - ddStartMs >= DD_TIMEOUT_MS) {
+  if (millis() - ddStartMsbr >= DD_TIMEOUT_MS || millis() - ddStartMsbl >= DD_TIMEOUT_MS ) {
     STOPALL();
-    Serial.print("DIST_TIMEOUT BL travel counts = ");
-    Serial.print(travelBL);
-    Serial.print("  target = ");
-    Serial.println(ddTargetCounts);
   }
 }
 
@@ -557,7 +662,7 @@ void DriveLeft(uint8_t speed, uint8_t direction) {
   analogWrite(BackLeftPWM,  0);
   digitalWrite(FrontLeftDIR, dir);
   digitalWrite(BackLeftDIR,  dir);
-  delay(30);
+  delay(15);
   analogWrite(FrontLeftPWM, speed);
   analogWrite(BackLeftPWM,  speed);
 }
@@ -569,9 +674,21 @@ void DriveRight(uint8_t speed, uint8_t direction) {
   analogWrite(BackRightPWM,  0);
   digitalWrite(FrontRightDIR, dir);
   digitalWrite(BackRightDIR,  dir);
-  delay(30);
+  delay(15);
   analogWrite(FrontRightPWM, speed);
   analogWrite(BackRightPWM,  speed);
+}
+void dualDriveRight(uint8_t speed, uint8_t direction){
+  digitalWrite(FrontRightDIR, direction);
+  digitalWrite(BackRightDIR,  direction);
+  analogWrite(FrontRightPWM, speed);
+  analogWrite(BackRightPWM,  speed);
+}
+void dualDriveLeft(uint8_t speed, uint8_t direction){
+  digitalWrite(FrontLeftDIR, direction);
+  digitalWrite(BackLeftDIR,  direction);
+  analogWrite(FrontLeftPWM, speed);
+  analogWrite(BackLeftPWM,  speed);
 }
 
 void ActuatorMovement(uint8_t speed, uint8_t direction) {
@@ -589,7 +706,8 @@ void STOPALL() {
   analogWrite(LeftActuatorPWM,  0);
   analogWrite(RightActuatorPWM, 0);
   myServo.write(90);
-  ddState = DD_IDLE;
+  ddStatebl = DD_IDLE;
+  ddStatebr = DD_IDLE;
 }
 
 void STOPACT() {
@@ -601,40 +719,115 @@ void Servomove(uint8_t angle) {
   myServo.write(angle);
 }
 
-void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
+void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t lobyte, uint8_t chksum){
+  uint8_t checky = 0^device^speed^direction^lobyte;
+  if(checky!=chksum){
+  return;
+  }
   switch (device) {
-    case 0xDC: {
-      uint16_t combined = ((uint16_t)speed << 8) | direction;
+    case 0xC8:{
+    // Load the left Encoder Counts
+      uint16_t combined = ((uint16_t)direction << 8) | lobyte;
       uint8_t packedDirection = (combined >> 15) & 0x01;   // 0=fwd, 1=rev
       uint16_t distanceUnits  = combined & 0x7FFF;         // 15-bit distance
       float dist_mm = (float)distanceUnits * DIST_UNIT_MM;
       int32_t targetCts = (int32_t)(dist_mm * COUNTS_PER_MM + 0.5f);
+      ddTargetCountsbl = targetCts;
+      ddDirectionbl    = packedDirection;
+      speed = constrain(speed, 0, 190);
+      ddspeedbl = speed;
+      break;
+  }
+
+    case 0xC9:{
+    // Load the Right Encoder Counts
+      uint16_t combined = ((uint16_t)direction << 8) | lobyte;
+      uint8_t packedDirection = (combined >> 15) & 0x01;   // 0=fwd, 1=rev
+      uint16_t distanceUnits  = combined & 0x7FFF;         // 15-bit distance
+      float dist_mm = (float)distanceUnits * DIST_UNIT_MM;
+      int32_t targetCts = (int32_t)(dist_mm * COUNTS_PER_MM + 0.5f);
+      ddTargetCountsbr = targetCts;
+      ddDirectionbr    = packedDirection;
+      speed = constrain(speed, 0, 190);
+      ddspeedbr = speed;
+
+      break;
+  }
+    // cont turn
+    case  0xE7: {
+      STOPALL();
+      zeroBLEncoder();
+      zeroBREncoder();
+      ddStartBR = 0;
+      ddStartBL = 0;
+      ddbrcont = true;
+      ddblcont = true;
+      autodrive = CONTINUE;
+      ddStartMsbr      = millis();
+      ddStartMsbl      = millis();
+      ddStatebl        = DD_RUNNING;
+      ddStatebr        = DD_RUNNING;
+      DriveLeft(ddspeedbl, ddDirectionbl);
+      DriveRight(ddspeedbr, ddDirectionbr);
+      updateBLEncoder();
+      updateBREncoder();
+      break;
+  }
+
+    // Isolated Turn
+    case 0xE8: {
+      STOPALL();
+      zeroBLEncoder();
+      zeroBREncoder();
+      ddStartBR = 0;
+      ddStartBL = 0;
+      ddbrcont = true;
+      ddblcont = true;
+      autodrive = DIFFERNTIALSTOP;
+      ddStartMsbr      = millis();
+      ddStartMsbl      = millis();
+      ddStatebl        = DD_RUNNING;
+      ddStatebr        = DD_RUNNING;
+      DriveLeft(ddspeedbl, ddDirectionbl);
+      DriveRight(ddspeedbr, ddDirectionbr);
+      updateBLEncoder();
+      updateBREncoder();
+      break;
+    }
+
+
+    case 0xDC: {
+      uint16_t combined = ((uint16_t)direction << 8) | lobyte;
+      uint8_t packedDirection = (combined >> 15) & 0x01;   // 0=fwd, 1=rev
+      uint16_t distanceUnits  = combined & 0x7FFF;         // 15-bit distance
+      float dist_mm = (float)distanceUnits * DIST_UNIT_MM;
+      int32_t targetCts = (int32_t)(dist_mm * COUNTS_PER_MM + 0.5f);
+      autodrive = DUAL;
 
       if (targetCts <= 0) break;
 
       STOPALL();
       delay(10);
       zeroBLEncoder();
+      zeroBREncoder();
+      speed = constrain(speed, 0, 190);
 
       ddStartBL      = 0;
-      ddTargetCounts = targetCts;
-      ddDirection    = packedDirection;
-      ddStartMs      = millis();
-      ddState        = DD_RUNNING;
-
-      Serial.print("DIST_START packed = ");
-      Serial.print(combined);
-      Serial.print("  units = ");
-      Serial.print(distanceUnits);
-      Serial.print("  mm = ");
-      Serial.print(dist_mm);
-      Serial.print("  target counts = ");
-      Serial.print(ddTargetCounts);
-      Serial.print("  dir = ");
-      Serial.println(ddDirection == 0 ? "FWD" : "REV");
-
-      DriveLeft(DD_DRIVE_SPEED, ddDirection);
-      DriveRight(DD_DRIVE_SPEED, ddDirection);
+      ddStartBR      = 0;
+      ddTargetCountsbl = targetCts;
+      ddTargetCountsbr = targetCts;
+      ddDirectionbr    = packedDirection;
+      ddDirectionbl    = !packedDirection;
+      ddspeedbr = speed;
+      ddspeedbl = speed;
+      ddStartMsbr      = millis();
+      ddStartMsbl      = millis();
+      ddStatebl        = DD_RUNNING;
+      ddStatebr        = DD_RUNNING;
+      DriveLeft(ddspeedbl, ddDirectionbl);
+      DriveRight(ddspeedbr, ddDirectionbr);
+      updateBLEncoder();
+      updateBREncoder();
       break;
     }
 
@@ -672,12 +865,12 @@ void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
     case 0x11:
       Servomove(speed);
       break;
-    case 0xD4:
-      MotorDriving(RightActuatorPWM, speed, direction, RightActuatorDIR);
-      break;
-    case 0xF7:
-      MotorDriving(LeftActuatorPWM, speed, direction, LeftActuatorDIR);
-      break;
+    // case 0xD4:
+    //   MotorDriving(RightActuatorPWM, speed, direction, RightActuatorDIR);
+    //   break;
+    // case 0xF7:
+    //   MotorDriving(LeftActuatorPWM, speed, direction, LeftActuatorDIR);
+    //   break;
     case 0x01:
       MotorDriving(FrontLeftPWM,  speed, direction, FrontLeftDIR);
       break;
@@ -701,4 +894,3 @@ void HandleInput(uint8_t device, uint8_t speed, uint8_t direction) {
       break;
   }
 }
-

@@ -1,0 +1,12 @@
+mission:
+  name: Untitled mission
+  steps:
+  - action: drive_forward
+    params:
+      distance_m: 2.0
+      use_camera: false
+      timeout_s: 25
+  - action: actuator_position
+    params:
+      target: dump
+      timeout_s: 3
