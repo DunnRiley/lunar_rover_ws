@@ -53,8 +53,13 @@ class Bridge(Node):
         super().__init__("nav_arduino_bridge")
         self.declare_parameter("cmd_port",   "")
         self.declare_parameter("telem_port", "")
+        self.declare_parameter("pivot_use_opposite_dirs", True)
+        self.declare_parameter("pivot_flip_cw_ccw", False)
         cmd_p   = self.get_parameter("cmd_port").value
         telem_p = self.get_parameter("telem_port").value
+        self._pivot_use_opposite = bool(
+            self.get_parameter("pivot_use_opposite_dirs").value)
+        self._pivot_flip = bool(self.get_parameter("pivot_flip_cw_ccw").value)
 
         ports = sorted(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*"))
         self._cmd_port   = cmd_p   or (ports[0] if ports else "/dev/ttyACM0")
@@ -84,6 +89,9 @@ class Bridge(Node):
         self.get_logger().info(f"Arduino bridge: cmd={self._cmd_port}")
         self.get_logger().info(
             f"  telem={self._telem_port or 'NONE (no IMU/enc data)'}")
+        self.get_logger().info(
+            f"  pivot_use_opposite_dirs={self._pivot_use_opposite}  "
+            f"pivot_flip_cw_ccw={self._pivot_flip}")
         self.get_logger().info("  NOTE: 0xDC does not produce DIST_DONE output.")
 
     def _connect_cmd(self):
@@ -140,19 +148,32 @@ class Bridge(Node):
         arc_mm    = float(msg.data[0])
         speed     = int(msg.data[1])
         clockwise = bool(int(msg.data[2]))
-        reverse   = not clockwise
-        db, lo    = encode_dist(arc_mm, reverse)
+        if self._pivot_flip:
+            clockwise = not clockwise
         speed     = min(speed, 190)
+
+        if self._pivot_use_opposite:
+            # Most firmware variants need opposite packed direction bits for C8/C9
+            # to produce an in-place pivot (instead of both sides moving straight).
+            # CW  => left fwd, right rev ;  CCW => left rev, right fwd
+            left_rev  = not clockwise
+            right_rev = clockwise
+        else:
+            # Legacy mode: same direction bit sent to both sides.
+            left_rev = right_rev = (not clockwise)
+
+        l_db, l_lo = encode_dist(arc_mm, left_rev)
+        r_db, r_lo = encode_dist(arc_mm, right_rev)
 
         with self._seq_lock:
             # Stop any running command first — clears ddDirection state on Arduino
             self._write(pkt(0xFF, 0, 0, 0))
             time.sleep(0.05)
             # Load left wheel target
-            self._write(pkt(0xC8, speed, db, lo))
+            self._write(pkt(0xC8, speed, l_db, l_lo))
             time.sleep(0.04)
             # Load right wheel target
-            self._write(pkt(0xC9, speed, db, lo))
+            self._write(pkt(0xC9, speed, r_db, r_lo))
             time.sleep(0.04)
             # Start turn
             self._write(pkt(0xE8, 0, 0, 0))
@@ -160,7 +181,7 @@ class Bridge(Node):
         self.get_logger().info(
             f"Turn arc={arc_mm:.0f}mm speed={speed} "
             f"{'CW' if clockwise else 'CCW'} "
-            f"[FF→C8({db:02X},{lo:02X})→C9→E8]")
+            f"[FF→C8({l_db:02X},{l_lo:02X})→C9({r_db:02X},{r_lo:02X})→E8]")
 
     def _cmd_cb(self, msg: Float32MultiArray):
         """[device, speed, direction] or [device, speed, direction, lobyte]"""
