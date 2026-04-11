@@ -151,6 +151,7 @@ class GUI(QMainWindow):
         self._steps      = []
         self._yaml_path  = ""
         self._ros_pub_nd = None
+        self._pub_ex     = None
         self._start_pub  = self._file_pub  = None
         self._dist_pub   = self._cmd_pub   = self._turn_pub = None
 
@@ -643,11 +644,42 @@ class GUI(QMainWindow):
             self._turn_pub  = self._ros_pub_nd.create_publisher(
                 Float32MultiArray, "/nav/arduino_turn_cmd", q)
             from rclpy.executors import SingleThreadedExecutor
-            ex = SingleThreadedExecutor(); ex.add_node(self._ros_pub_nd)
-            for _ in range(5): ex.spin_once(timeout_sec=0.02)
+            self._pub_ex = SingleThreadedExecutor()
+            self._pub_ex.add_node(self._ros_pub_nd)
+            for _ in range(5):
+                self._pub_ex.spin_once(timeout_sec=0.02)
             self._log("ROS publishers ready")
         except Exception as e:
             self._log(f"ROS publisher init failed: {e}")
+
+    def _flush_ros(self, spins=2):
+        """Give DDS a moment to actually transmit outgoing messages."""
+        if self._pub_ex is None:
+            return
+        for _ in range(max(1, spins)):
+            self._pub_ex.spin_once(timeout_sec=0.01)
+
+    def _ensure_remote_mission_stack(self):
+        """Start bridge+sequencer on miniPC if they are not already up."""
+        remote = (
+            'source /opt/ros/$(ls /opt/ros | head -1)/setup.bash 2>/dev/null\n'
+            f'[ -f {MINIPC_WS}/install/setup.bash ] && source {MINIPC_WS}/install/setup.bash\n'
+            'export ROS_DOMAIN_ID=42 ROS_LOCALHOST_ONLY=0 ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET\n'
+            'ros2 node list 2>/dev/null | grep -q "/nav_arduino_bridge" || '
+            f'(nohup python3 {MINIPC_WS}/nav_arduino_bridge.py >/tmp/rover_bridge.log 2>&1 &)\n'
+            'ros2 node list 2>/dev/null | grep -q "/nav_mission_sequencer" || '
+            f'(nohup python3 {MINIPC_WS}/nav_mission_sequencer.py >/tmp/rover_sequencer.log 2>&1 &)\n'
+            'sleep 1\n'
+            'echo STACK_READY\n'
+        )
+        try:
+            r = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=no",
+                 f"{MINIPC_USER}@{MINIPC_IP}", "bash", "-s"],
+                input=remote, capture_output=True, text=True, timeout=15)
+            return ("STACK_READY" in (r.stdout or "")), (r.stdout + r.stderr)
+        except Exception as e:
+            return False, str(e)
 
     def _start_mission(self):
         if not self._steps:
@@ -668,6 +700,13 @@ class GUI(QMainWindow):
             self._log(f"Auto-save failed: {e}"); return
 
         def _send():
+            ok_stack, out_stack = self._ensure_remote_mission_stack()
+            if not ok_stack:
+                self._log("Could not start mission stack on miniPC.")
+                self._log(f"  {out_stack[:250]}")
+                self._log("  Run manually: bash ~/lunar_rover_ws/run_mission.sh --dry-run mission.yaml")
+                return
+
             # Step 1: SCP the YAML to the miniPC
             self._log(f"Copying YAML to miniPC...")
             scp = subprocess.run(
@@ -716,6 +755,7 @@ class GUI(QMainWindow):
         self._ensure_pubs()
         if ROS_AVAILABLE and self._dist_pub:
             msg = Float32(); msg.data = float(m); self._dist_pub.publish(msg)
+            self._flush_ros(spins=3)
             self._log(f"Drive {m:+.1f}m")
         else: self._log("ROS unavailable — is nav_arduino_bridge running on miniPC?")
 
@@ -729,6 +769,9 @@ class GUI(QMainWindow):
             m = Float32MultiArray()
             m.data = [float(device),float(speed),float(direction),float(lobyte)]
             self._cmd_pub.publish(m)
+            time.sleep(0.02)
+            self._cmd_pub.publish(m)  # duplicate once for lossy Wi-Fi links
+            self._flush_ros(spins=3)
             self._log(f"Cmd 0x{device:02X} sp={speed} dir={direction}")
         else: self._log("ROS unavailable")
 
@@ -743,6 +786,7 @@ class GUI(QMainWindow):
             m = Float32MultiArray()
             m.data = [arc_mm, float(speed), float(cw)]
             self._turn_pub.publish(m)
+            self._flush_ros(spins=3)
             self._log(f"Pivot {degrees:+.1f}°  arc={arc_mm:.0f}mm  "
                       f"{'CW' if cw else 'CCW'}  speed={speed}")
         else: self._log("ROS unavailable")
