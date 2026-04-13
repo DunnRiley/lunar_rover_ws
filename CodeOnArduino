@@ -100,7 +100,7 @@ uint8_t DD_DRIVE_SPEED   = 120;
 
 // Direction inversion for mirrored drivetrain.
 bool invertLeftDriveDirection  = false;
-bool invertRightDriveDirection = true;
+bool invertRightDriveDirection = false;
 
 // Only Back Left is used for distance measurement.
 static uint16_t blPrevAngle = 0;
