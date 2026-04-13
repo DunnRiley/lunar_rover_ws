@@ -107,7 +107,7 @@ uint8_t DD_DRIVE_SPEED   = 120;
 
 // Direction inversion for mirrored drivetrain.
 bool invertLeftDriveDirection  = false;
-bool invertRightDriveDirection = false;
+bool invertRightDriveDirection = true;
 
 // Only Back Left is used for distance measurement.
 static uint16_t blPrevAngle = 0;
@@ -533,10 +533,6 @@ void updateDriveDistancebr(){
     ddStatebr = DD_IDLE;
     STOPALL();
     return;
-  }
-
-  if (millis() - ddStartMsbr >= DD_TIMEOUT_MS || millis() - ddStartMsbl >= DD_TIMEOUT_MS ) {
-    STOPALL();
   }
 }
 
@@ -1092,7 +1088,7 @@ case 0xDD: {
       break;
     case 0xCA:
       actuatorState = CALIBRATE;
-      break;
+      break;  
     case 0xCB: {
       uint16_t v = ((uint16_t)speed << 8) | direction;
       noInterrupts();
