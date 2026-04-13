@@ -787,6 +787,14 @@ class GUI(QMainWindow):
             m.data = [arc_mm, float(speed), float(cw)]
             self._turn_pub.publish(m)
             self._flush_ros(spins=3)
+            # Bridge/firmware combos may keep pivot mode active until STOPALL.
+            # Send an automatic stop after estimated turn time.
+            speed_ms = max(0.20 * (speed / 120.0), 0.05)
+            turn_s = ((arc_mm / 1000.0) / speed_ms) * 1.3 + 0.6
+            threading.Thread(
+                target=lambda: (time.sleep(turn_s), self._send_raw_cmd(0xFF, 0, 0, 0)),
+                daemon=True
+            ).start()
             self._log(f"Pivot {degrees:+.1f}°  arc={arc_mm:.0f}mm  "
                       f"{'CW' if cw else 'CCW'}  speed={speed}")
         else: self._log("ROS unavailable")
@@ -810,6 +818,9 @@ class GUI(QMainWindow):
 
         def _send_seq():
             m = Float32MultiArray()
+            # Stop any existing motion first to avoid stale turn state.
+            m.data = [0xFF, 0.0, 0.0, 0.0]
+            self._cmd_pub.publish(m); time.sleep(0.04)
             # Load BL
             m.data = [0xC8, float(speed), float(bl_db), float(bl_lo)]
             self._cmd_pub.publish(m); time.sleep(0.04)
@@ -818,6 +829,13 @@ class GUI(QMainWindow):
             self._cmd_pub.publish(m); time.sleep(0.04)
             # Start isolated
             m.data = [0xE8, 0.0, 0.0, 0.0]
+            self._cmd_pub.publish(m)
+            # Auto-stop arc after estimated completion.
+            longest_mm = max(abs(bl_mm), abs(br_mm))
+            speed_ms = max(0.20 * (speed / 120.0), 0.05)
+            turn_s = ((longest_mm / 1000.0) / speed_ms) * 1.3 + 0.6
+            time.sleep(turn_s)
+            m.data = [0xFF, 0.0, 0.0, 0.0]
             self._cmd_pub.publish(m)
             self._log(f"Arc  BL={bl_mm:+.0f}mm  BR={br_mm:+.0f}mm  speed={speed}")
         threading.Thread(target=_send_seq, daemon=True).start()
