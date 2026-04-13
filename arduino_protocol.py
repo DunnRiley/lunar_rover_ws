@@ -39,6 +39,7 @@ LOAD_LEFT      = 0xC8
 LOAD_RIGHT     = 0xC9
 TURN_ISOLATED  = 0xE8   # each side stops when it hits its own target
 TURN_CONTINUE  = 0xE7   # slower side waits for faster, then both stop
+TURN_START_NEW = 0xDD   # newer firmware turn-start command
 
 DRIVE_LEFT     = 0x05
 DRIVE_RIGHT    = 0x06
@@ -102,8 +103,12 @@ def start_continue() -> bytes:
     """0xE7: start — both sides wait until both complete."""
     return pkt(TURN_CONTINUE)
 
+def start_turn_new() -> bytes:
+    """0xDD: start turn (newer firmware)."""
+    return pkt(TURN_START_NEW)
 
-def pivot_packets(arc_mm: float, speed: int, clockwise: bool) -> list:
+
+def pivot_packets(arc_mm: float, speed: int, clockwise: bool, start_cmd: int = TURN_START_NEW) -> list:
     """
     3-packet sequence for a pivot turn.
     arc_mm  = how far each wheel travels (track_width/2 * angle_radians)
@@ -119,7 +124,7 @@ def pivot_packets(arc_mm: float, speed: int, clockwise: bool) -> list:
     return [
         pkt(LOAD_LEFT,     speed, db, lo),
         pkt(LOAD_RIGHT,    speed, db, lo),
-        pkt(TURN_ISOLATED),
+        pkt(start_cmd),
     ]
 
 

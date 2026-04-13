@@ -4,10 +4,10 @@ nav_mission_sequencer.py  —  MINI PC
 =====================================
 
 IMPORTANT — HOW THIS WORKS
-  This sequencer publishes the SAME ROS topics that the GUI control buttons use:
-    /nav/arduino_dist_cmd   (Float32, metres)      → bridge → 0xDC
-    /nav/arduino_turn_cmd   (Float32MultiArray)     → bridge → C8+C9+E8
-    /nav/arduino_cmd        (Float32MultiArray)     → bridge → raw packet
+  This sequencer publishes to:
+    /nav/arduino_turn_cmd   (Float32MultiArray)  → bridge → C8+C9+start (0xDD default)
+    /nav/arduino_cmd        (Float32MultiArray)  → bridge → raw packet
+  Distance commands are sent as raw 0xDC so mission speed is honored.
 
   nav_arduino_bridge.py MUST be running — it is the only process that owns
   the Arduino serial port.  Start it before starting missions:
@@ -39,8 +39,7 @@ import math, os, json, threading, time, sys
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from rclpy.executors import SingleThreadedExecutor
-from std_msgs.msg import Bool, String, Float32, Float32MultiArray
+from std_msgs.msg import Bool, String, Float32MultiArray
 
 try:
     import yaml
@@ -55,6 +54,7 @@ SETTLE_S           = 2.0     # extra seconds after time estimate before declarin
 MAX_SPEED          = 190     # Arduino firmware cap for encoder commands
 FLIP_TURN_DIR      = False   # set True if CW/CCW are backwards on your robot
 ACT_TIMEOUT_S      = 20.0    # how long to wait for an actuator preset to complete
+TURN_START_CMD     = 0xDD    # new firmware turn start command
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -84,8 +84,6 @@ class Sequencer(Node):
         self._apub = self.create_publisher(Bool,   "/mission/active", rel)
 
         # ── Command publishers (same topics as the GUI buttons) ───────────────
-        self._dist_pub = self.create_publisher(
-            Float32,          "/nav/arduino_dist_cmd",   rel)
         self._turn_pub = self.create_publisher(
             Float32MultiArray,"/nav/arduino_turn_cmd",   rel)
         self._cmd_pub  = self.create_publisher(
@@ -100,28 +98,32 @@ class Sequencer(Node):
         self.get_logger().info(f"  TIME_BUFFER       = {TIME_BUFFER}×")
         self.get_logger().info(f"  SETTLE_S          = {SETTLE_S} s")
         self.get_logger().info(f"  FLIP_TURN_DIR     = {FLIP_TURN_DIR}")
-        self.get_logger().info("  Publishes to /nav/arduino_dist_cmd, /nav/arduino_turn_cmd,")
-        self.get_logger().info("  /nav/arduino_cmd  —  nav_arduino_bridge.py must be running!")
+        self.get_logger().info("  Publishes to /nav/arduino_turn_cmd and /nav/arduino_cmd")
+        self.get_logger().info("  (uses raw 0xDC for distance + 0xDD turn-start by default)")
+        self.get_logger().info("  nav_arduino_bridge.py must be running!")
         self.get_logger().info("  Waiting for /mission/start True ...")
         self.get_logger().info("=" * 60)
 
     # ── ROS helpers ───────────────────────────────────────────────────────────
 
-    def _spin_once(self):
-        """Process pending callbacks so publishers get delivered."""
-        executor = SingleThreadedExecutor()
-        executor.add_node(self)
-        executor.spin_once(timeout_sec=0.01)
+    @staticmethod
+    def _encode_dist_mm(mm: float, reverse: bool):
+        units = int(min(0x7FFF, max(0, round(abs(mm)))))
+        combined = ((1 if reverse else 0) << 15) | units
+        return (combined >> 8) & 0xFF, combined & 0xFF
 
-    def _send_dist(self, metres: float):
-        """Same as the GUI '1m FWD' button."""
-        m = Float32(); m.data = float(metres)
-        self._dist_pub.publish(m)
+    def _send_dist(self, metres: float, speed: int):
+        """
+        Send encoder-based straight command directly as raw 0xDC.
+        This preserves mission speed setting (bridge /nav/arduino_dist_cmd is fixed at PWM=120).
+        """
+        db, lo = self._encode_dist_mm(abs(metres) * 1000.0, metres < 0)
+        self._send_raw(0xDC, speed, db, lo)
 
-    def _send_turn(self, arc_mm: float, speed: int, clockwise: bool):
+    def _send_turn(self, arc_mm: float, speed: int, clockwise: bool, start_cmd: int = TURN_START_CMD):
         """Same as the GUI pivot preset buttons."""
         m = Float32MultiArray()
-        m.data = [float(arc_mm), float(speed), float(1 if clockwise else 0)]
+        m.data = [float(arc_mm), float(speed), float(1 if clockwise else 0), float(start_cmd)]
         self._turn_pub.publish(m)
 
     def _send_raw(self, device: int, speed: int = 0, direction: int = 0, lobyte: int = 0):
@@ -288,7 +290,7 @@ class Sequencer(Node):
 
         self.get_logger().info(
             f"   Drive forward {dist_m:.3f} m  speed={speed}")
-        self._send_dist(dist_m)
+        self._send_dist(dist_m, speed)
         return self._wait_drive(dist_m, speed, timeout)
 
     def _do_drive_backward(self, p: dict) -> bool:
@@ -298,7 +300,7 @@ class Sequencer(Node):
 
         self.get_logger().info(
             f"   Drive backward {dist_m:.3f} m  speed={speed}")
-        self._send_dist(-dist_m)   # negative = reverse
+        self._send_dist(-dist_m, speed)   # negative = reverse
         return self._wait_drive(dist_m, speed, timeout)
 
     def _do_pivot_turn(self, p: dict) -> bool:
