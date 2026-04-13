@@ -5,7 +5,7 @@ nav_arduino_bridge.py  —  MINI PC
 Bridges /nav/arduino_dist_cmd  (Float32, metres)  -> 0xDC serial packet
 Bridges /nav/arduino_cmd       (Float32MultiArray) -> raw packet forwarder
 Bridges /nav/arduino_turn_cmd  (Float32MultiArray [arc_mm, speed, clockwise_int])
-                                -> 0xC8 + 0xC9 + 0xE8
+                                -> 0xC8 + 0xC9 + turn-start (0xDD default)
 
 Publishes:
   /imu/gyro_deg_s  Float32MultiArray  [gx, gy, gz] from Serial2 telemetry
@@ -34,6 +34,7 @@ ENC_MARKER = 0xA5
 IMU_BYTES  = 24
 ENC_BYTES  = 2
 BAUD       = 115200
+TURN_START_DEFAULT = 0xDD
 
 
 def pkt(device, speed=0, direction=0, lobyte=0):
@@ -55,11 +56,13 @@ class Bridge(Node):
         self.declare_parameter("telem_port", "")
         self.declare_parameter("pivot_use_opposite_dirs", True)
         self.declare_parameter("pivot_flip_cw_ccw", False)
+        self.declare_parameter("turn_start_cmd", TURN_START_DEFAULT)
         cmd_p   = self.get_parameter("cmd_port").value
         telem_p = self.get_parameter("telem_port").value
         self._pivot_use_opposite = bool(
             self.get_parameter("pivot_use_opposite_dirs").value)
         self._pivot_flip = bool(self.get_parameter("pivot_flip_cw_ccw").value)
+        self._turn_start_cmd = int(self.get_parameter("turn_start_cmd").value) & 0xFF
 
         ports = sorted(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*"))
         self._cmd_port   = cmd_p   or (ports[0] if ports else "/dev/ttyACM0")
@@ -92,6 +95,7 @@ class Bridge(Node):
         self.get_logger().info(
             f"  pivot_use_opposite_dirs={self._pivot_use_opposite}  "
             f"pivot_flip_cw_ccw={self._pivot_flip}")
+        self.get_logger().info(f"  turn_start_cmd=0x{self._turn_start_cmd:02X}")
         self.get_logger().info("  NOTE: 0xDC does not produce DIST_DONE output.")
 
     def _connect_cmd(self):
@@ -135,7 +139,7 @@ class Bridge(Node):
 
     def _turn_cb(self, msg: Float32MultiArray):
         """
-        [arc_mm, speed, clockwise_int]
+        [arc_mm, speed, clockwise_int, optional_start_cmd]
         clockwise_int: 1=CW, 0=CCW
 
         FIX for "second click goes forward":
@@ -148,6 +152,7 @@ class Bridge(Node):
         arc_mm    = float(msg.data[0])
         speed     = int(msg.data[1])
         clockwise = bool(int(msg.data[2]))
+        start_cmd = int(msg.data[3]) & 0xFF if len(msg.data) >= 4 else self._turn_start_cmd
         if self._pivot_flip:
             clockwise = not clockwise
         speed     = min(speed, 190)
@@ -175,13 +180,13 @@ class Bridge(Node):
             # Load right wheel target
             self._write(pkt(0xC9, speed, r_db, r_lo))
             time.sleep(0.04)
-            # Start turn
-            self._write(pkt(0xE8, 0, 0, 0))
+            # Start turn (new firmware uses 0xDD)
+            self._write(pkt(start_cmd, 0, 0, 0))
 
         self.get_logger().info(
             f"Turn arc={arc_mm:.0f}mm speed={speed} "
             f"{'CW' if clockwise else 'CCW'} "
-            f"[FF→C8({l_db:02X},{l_lo:02X})→C9({r_db:02X},{r_lo:02X})→E8]")
+            f"[FF→C8({l_db:02X},{l_lo:02X})→C9({r_db:02X},{r_lo:02X})→{start_cmd:02X}]")
 
     def _cmd_cb(self, msg: Float32MultiArray):
         """[device, speed, direction] or [device, speed, direction, lobyte]"""
