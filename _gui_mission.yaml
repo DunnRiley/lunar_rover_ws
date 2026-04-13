@@ -1,12 +1,38 @@
 mission:
   name: Untitled mission
   steps:
-  - action: drive_forward
+  - action: pivot_turn
     params:
-      distance_m: 2.0
-      use_camera: false
-      timeout_s: 25
-  - action: actuator_position
+      degrees: 45.0
+      speed: 100
+      timeout_s: 5
+  - action: drive_backward
     params:
-      target: dump
-      timeout_s: 3
+      distance_m: 0.15
+      speed: 120
+      timeout_s: 5
+  - action: pivot_turn
+    params:
+      degrees: 45.0
+      speed: 100
+      timeout_s: 5
+  - action: drive_backward
+    params:
+      distance_m: 0.15
+      speed: 120
+      timeout_s: 5
+  - action: pivot_turn
+    params:
+      degrees: 45.0
+      speed: 100
+      timeout_s: 5
+  - action: drive_backward
+    params:
+      distance_m: 0.15
+      speed: 120
+      timeout_s: 5
+  - action: pivot_turn
+    params:
+      degrees: 45.0
+      speed: 100
+      timeout_s: 5

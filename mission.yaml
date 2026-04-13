@@ -51,7 +51,7 @@ mission:
     - action: actuator_position
       params:
         target: dump
-        timeout_s: 8
+        timeout_s: 20
 
     - action: wait
       params:
@@ -113,6 +113,12 @@ mission:
         use_camera: false      # use encoder only — bucket may be in view
         timeout_s: 15
 
+    - action: pivot_turn
+      prams:
+        degrees: 90    
+        speed: 0.18
+        tolerance_degs: 3
+        timeout_s : 15 
 
 
     # # ── Phase 5: Navigate back toward the dump zone ────────────────────────

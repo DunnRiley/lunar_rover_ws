@@ -29,7 +29,9 @@ speaker-test -t sine -f 440
 mplayer chiefkeefsosa.mp3
 
 ## Record Cam
-rs-record -l output.bag
+rs-record -f depth_only.bag -t 5
+
+rs-convert -i depth_only.bag -p depth_frame
 
 
 #### OLD ####
@@ -149,4 +151,3 @@ ros2 run lunar_robot_hardware controller_teleop
 
 ### Terminal 2 for point click navigation
 ros2 launch lunar_robot_hardware arduino_navigation.launch.py
-

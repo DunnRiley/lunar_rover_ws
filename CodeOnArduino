@@ -20,6 +20,13 @@ float gx_bias = 0, gy_bias = 0, gz_bias = 0;
 // Servo
 Servo myServo;
 
+
+
+bool pendingReverse = false;
+int32_t pendingReverseCounts = 0;
+uint8_t pendingReverseDirBL = 0;
+uint8_t pendingReverseDirBR = 0;
+
 // ── Pin definitions ──────────────────────────────────────────────────────
 const uint8_t FrontRightPWM     = 4;
 const uint8_t BackRightPWM      = 5;
@@ -86,7 +93,7 @@ const uint8_t TELEMETRY_BYTES = 30;
 // ═══════════════════════════════════════════════════════════════════════════
 // ── BL-ONLY DISTANCE DRIVE SETTINGS ───────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
-float WHEEL_DIAMETER_MM = 457.2f;
+float WHEEL_DIAMETER_MM = 355.6f;
 float GEAR_RATIO        = 168.0f;
 float COUNTS_PER_MM     = 0.0f;
 
@@ -122,13 +129,11 @@ uint8_t ddspeedbr = 0;
 uint8_t ddspeedbl = 0;
 bool ddblcont = false;
 bool ddbrcont = false;
-float kp = 0.5; 
 unsigned long         ddStartMsbl      = 0;
 unsigned long         ddStartMsbr      = 0;
 
 const unsigned long   DD_TIMEOUT_MS  = 30000;
-
-enum EncodCommandState {IDLE, DUAL, DIFFERNTIALSTOP, CONTINUE};
+enum EncodCommandState { IDLE, DUAL, DIFFERNTIALSTOP, CONTINUE};
 static EncodCommandState autodrive = IDLE;
 bool continuedrive = false;
 
@@ -171,6 +176,91 @@ int16_t angleDelta14(uint16_t newAngle, uint16_t oldAngle);
 void zeroBLEncoder();
 void updateBLEncoder();
 void updateDriveDistancebl();
+
+
+void zeroBREncoder();
+void updateBREncoder();
+void dualdrive();
+void dualDriveLeft(uint8_t speed, uint8_t direction);
+void dualDriveRight(uint8_t speed, uint8_t direction);
+void updateDriveDistancebr();
+int trapezoidPWM(int32_t distanceTraveled,
+                 int32_t totalDistance,
+                 int maxPWM,
+                 int minPWM,
+                 int32_t accelCounts,
+                 int32_t decelCounts);
+
+int SampleTime = 1;
+
+void softStopDrive(uint8_t dirLeft, uint8_t dirRight, int leftStartPWM, int rightStartPWM);
+volatile bool pidFlag = false;
+
+double straightKp = 0.015;
+double straightKi = 0.0001;
+double straightKd = 0.001;
+
+double straightErrSum = 0.0;
+double straightLastErr = 0.0;
+unsigned long straightLastMs = 0;
+
+const double Ts = 0.01; // 10 ms
+
+// void computePID() {
+//     double error = (double)positionError14(setpoint, input);
+//     errSum += error * Ts;
+//     if (errSum > 1000.0) errSum = 1000.0;
+//     if (errSum < -1000.0) errSum = -1000.0;
+
+//     double dErr = (error - lastErr) / Ts;
+
+//     output = pidKp * error + pidKi * errSum + pidKd * dErr;
+
+//     if (output > 255.0) output = 255.0;
+//     if (output < -255.0) output = -255.0;
+
+//     lastErr = error;
+// }
+
+// int16_t positionError14(uint16_t target, uint16_t current) {
+//     int16_t error = (int16_t)(target - current);
+//     if (error > 8191)  error -= 16384;
+//     if (error < -8192) error += 16384;
+//     return error;
+// }
+
+
+// void setupTime1_10ms(){
+//     cli();
+//     TCCR1A = 0;
+//     TCCR1B = 0;
+//     TCNT1 = 0;
+
+//     OCR1A = 2499;
+//     TCCR1B |= (1 << WGM12);
+//     TCCR1B |= (1 << CS11) | (1 << CS10);
+//     TIMSK1 |= (1 << OCIE1A);
+//     sei();
+// }
+
+// ISR(TIMER1_COMPA_vect){
+//     pidFlag = true;
+// }
+
+// void applyMotorOutput(int pwmCmd) {
+//     pwmCmd = constrain(pwmCmd, -255, 255);
+
+//     if (pwmCmd > 0) {
+//         DriveLeft((uint8_t)pwmCmd, 0);   // forward
+//     }
+//     else if (pwmCmd < 0) {
+//         DriveLeft((uint8_t)(-pwmCmd), 1); // reverse
+//     }
+//     else {
+//         DriveLeft(0, 0);
+//     }
+// }
+
 
 void setup() {
   pinMode(53, OUTPUT);
@@ -216,6 +306,7 @@ void setup() {
   SPI.begin();
   COUNTS_PER_MM = (16384.0f * GEAR_RATIO) / (3.14159265f * WHEEL_DIAMETER_MM);
   zeroBLEncoder();
+//   void setupTime1_10ms();
 }
 
 void loop() {
@@ -253,14 +344,12 @@ void loop() {
     rxState = WAIT_START;
     idx = 0;
   }
-  updateBLEncoder();
-  updateBREncoder();
   switch (autodrive){
     case IDLE:
       break;
     case DUAL:
       dualdrive();
-      break;
+       break;
     case DIFFERNTIALSTOP:
       continuedrive = false;
       updateDriveDistancebr();
@@ -273,6 +362,7 @@ void loop() {
       break;
     default:
       STOPALL();
+      break;
   }
 
   switch (actuatorState) {
@@ -356,6 +446,9 @@ void updateBREncoder() {
 }
 
 void dualdrive() {
+  updateBREncoder();
+  updateBLEncoder();
+
   if (ddStatebr != DD_RUNNING || ddStatebl != DD_RUNNING) return;
 
   int32_t travelBR = brPosition - ddStartBR;
@@ -364,22 +457,58 @@ void dualdrive() {
   if (travelBR < 0) travelBR = -travelBR;
   if (travelBL < 0) travelBL = -travelBL;
 
-//  int32_t error = travelBR - travelBL;
-//  int correction = (int)(kp * error);
-//  correction = constrain(correction, -40, 40);
-//
-//  int rightPWM = ddspeedbr - correction;
-//  int leftPWM  = ddspeedbl + correction;
-//
-//  rightPWM = constrain(rightPWM, 0, 255);
-//  leftPWM  = constrain(leftPWM, 0, 255);
-//
-//  dualDriveLeft((uint8_t)leftPWM, ddDirectionbl);
-//  dualDriveRight((uint8_t)rightPWM, ddDirectionbr);
+  int32_t avgTravel = (travelBR + travelBL) / 2;
+int32_t targetError = (ddTargetCountsbr) - avgTravel;
+  int32_t syncError   = travelBR - travelBL;
 
-  if (travelBR >= ddTargetCountsbr || travelBL >= ddTargetCountsbl) {
-    STOPALL();
-  }
+  unsigned long now = millis();
+  double dt = (now - straightLastMs) / 1000.0;
+  if (dt <= 0) dt = 0.001;
+
+  straightErrSum += syncError * dt;
+  if (straightErrSum > 1000) straightErrSum = 1000;
+  if (straightErrSum < -1000) straightErrSum = -1000;
+
+  double dErr = (syncError - straightLastErr) / dt;
+  double correction = straightKp * syncError
+                    + straightKi * straightErrSum
+                    + straightKd * dErr;
+
+  straightLastErr = syncError;
+  straightLastMs = now;
+
+  int32_t totalDistance = ddTargetCountsbr;
+int32_t distanceTraveled = avgTravel;
+int accelCounts = max((int32_t)80, totalDistance / 6);
+int decelCounts = max((int32_t)1000, (totalDistance * 4) / 5);
+int basePWM;
+if (targetError > 2000) {
+    basePWM = ddspeedbr;
+} else if (targetError > 1000) {
+    basePWM = 90;
+} else if (targetError > 10) {
+    basePWM = 70;
+} else {
+    basePWM = 40;
+}
+    int maxCorrection = basePWM / 2;
+    int corrInt = constrain((int)correction, -maxCorrection, maxCorrection);
+
+    int leftPWM  = basePWM + corrInt;
+    int rightPWM = basePWM - corrInt;
+
+
+  leftPWM  = constrain(leftPWM,  0, 180);
+  rightPWM = constrain(rightPWM, 0, 180);
+
+  dualDriveLeft((uint8_t)leftPWM, ddDirectionbl);
+  dualDriveRight((uint8_t)rightPWM, ddDirectionbr);
+
+if (targetError <= 0) {
+    softStopDrive(ddDirectionbl, ddDirectionbr, leftPWM, rightPWM);
+    return;
+}
+    return;
 }
 
 void updateDriveDistancebr(){
@@ -719,6 +848,69 @@ void Servomove(uint8_t angle) {
   myServo.write(angle);
 }
 
+    // Ramp up
+int trapezoidPWM(int32_t distanceTraveled,
+                 int32_t totalDistance,
+                 int maxPWM,
+                 int minPWM,
+                 int32_t accelCounts,
+                 int32_t decelCounts)
+{
+    if (totalDistance <= 0) return 0;
+
+    if (distanceTraveled < 0) distanceTraveled = 0;
+    if (distanceTraveled > totalDistance) distanceTraveled = totalDistance;
+
+    int32_t distanceRemaining = totalDistance - distanceTraveled;
+
+    if (accelCounts + decelCounts > totalDistance) {
+        accelCounts = totalDistance / 2;
+        decelCounts = totalDistance - accelCounts;
+    }
+
+    if (accelCounts < 1) accelCounts = 1;
+    if (decelCounts < 1) decelCounts = 1;
+
+    if (distanceTraveled < accelCounts) {
+        float x = (float)distanceTraveled / (float)accelCounts;
+        return minPWM + (int)((maxPWM - minPWM) * x);
+    }
+
+if (distanceRemaining < decelCounts) {
+    float x = (float)distanceRemaining / (float)decelCounts;
+    x = x * x * x;
+    return minPWM + (int)((maxPWM - minPWM) * x);
+}
+
+    return maxPWM;
+}
+
+void softStopDrive(uint8_t dirLeft, uint8_t dirRight, int leftStartPWM, int rightStartPWM) {
+    leftStartPWM  = constrain(leftStartPWM,  0, 255);
+    rightStartPWM = constrain(rightStartPWM, 0, 255);
+
+    int pwm = max(leftStartPWM, rightStartPWM);
+
+    for (; pwm > 0; pwm -= 10) {
+        int l = min(leftStartPWM, pwm);
+        int r = min(rightStartPWM, pwm);
+
+        dualDriveLeft((uint8_t)l, dirLeft);
+        dualDriveRight((uint8_t)r, dirRight);
+        delay(20);
+    }
+
+    analogWrite(FrontLeftPWM,  0);
+    analogWrite(BackLeftPWM,   0);
+    analogWrite(FrontRightPWM, 0);
+    analogWrite(BackRightPWM,  0);
+
+    ddStatebl = DD_IDLE;
+    ddStatebr = DD_IDLE;
+    autodrive = IDLE;
+}
+
+
 void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t lobyte, uint8_t chksum){
   uint8_t checky = 0^device^speed^direction^lobyte;
   if(checky!=chksum){
@@ -734,8 +926,7 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
       int32_t targetCts = (int32_t)(dist_mm * COUNTS_PER_MM + 0.5f);
       ddTargetCountsbl = targetCts;
       ddDirectionbl    = packedDirection;
-      speed = constrain(speed, 0, 190);
-      ddspeedbl = speed;
+      ddspeedbl = constrain(speed,  0, 190);
       break;
   }
 
@@ -748,8 +939,7 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
       int32_t targetCts = (int32_t)(dist_mm * COUNTS_PER_MM + 0.5f);
       ddTargetCountsbr = targetCts;
       ddDirectionbr    = packedDirection;
-      speed = constrain(speed, 0, 190);
-      ddspeedbr = speed;
+      ddspeedbr =  constrain(speed,  0, 190);
 
       break;
   }
@@ -794,6 +984,60 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
       updateBREncoder();
       break;
     }
+case 0xDD: {
+    if (!(autodrive == DUAL && ddStatebl == DD_RUNNING && ddStatebr == DD_RUNNING)) {
+        break;
+    }
+
+    uint16_t combined = ((uint16_t)direction << 8) | lobyte;
+    uint8_t adjustSign = (combined >> 15) & 0x01;   // 0 = add, 1 = subtract/reverse
+    uint16_t distanceUnits = combined & 0x7FFF;
+
+    float dist_mm = (float)distanceUnits * DIST_UNIT_MM;
+    int32_t deltaCounts = (int32_t)(dist_mm * COUNTS_PER_MM + 0.5f);
+
+    if (adjustSign == 0) {
+        // Extend current move forward by exactly deltaCounts
+        ddTargetCountsbl += deltaCounts;
+        ddTargetCountsbr += deltaCounts;
+    } else {
+        // Stop current move, then move backward by exactly deltaCounts
+        pendingReverse = true;
+        pendingReverseCounts = deltaCounts;
+        pendingReverseDirBL = !ddDirectionbl;
+        pendingReverseDirBR = !ddDirectionbr;
+
+        softStopDrive(ddDirectionbl, ddDirectionbr, ddspeedbl, ddspeedbr);
+
+        STOPALL();
+        delay(10);
+        zeroBLEncoder();
+        zeroBREncoder();
+        straightErrSum = 0.0;
+        straightLastErr = 0.0;
+        straightLastMs = millis();
+
+        ddStartBL = 0;
+        ddStartBR = 0;
+        ddTargetCountsbl = pendingReverseCounts;
+        ddTargetCountsbr = pendingReverseCounts;
+        ddDirectionbl = pendingReverseDirBL;
+        ddDirectionbr = pendingReverseDirBR;
+        ddStatebl = DD_RUNNING;
+        ddStatebr = DD_RUNNING;
+        autodrive = DUAL;
+
+        DriveLeft(ddspeedbl, ddDirectionbl);
+        DriveRight(ddspeedbr, ddDirectionbr);
+        updateBLEncoder();
+        updateBREncoder();
+
+        pendingReverse = false;
+        pendingReverseCounts = 0;
+    }
+
+    break;
+}
 
 
     case 0xDC: {
@@ -810,7 +1054,9 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
       delay(10);
       zeroBLEncoder();
       zeroBREncoder();
-      speed = constrain(speed, 0, 190);
+      straightErrSum = 0.0;
+      straightLastErr = 0.0;
+      straightLastMs = millis();
 
       ddStartBL      = 0;
       ddStartBR      = 0;
@@ -818,8 +1064,8 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
       ddTargetCountsbr = targetCts;
       ddDirectionbr    = packedDirection;
       ddDirectionbl    = !packedDirection;
-      ddspeedbr = speed;
-      ddspeedbl = speed;
+      ddspeedbr =  constrain(speed,  0, 190);
+      ddspeedbl =  constrain(speed,  0, 190);
       ddStartMsbr      = millis();
       ddStartMsbl      = millis();
       ddStatebl        = DD_RUNNING;
@@ -837,7 +1083,7 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
     case 0xA9:
       actuatorState = DRIVEPOSITION;
       break;
-    case 0xB3:
+    case 0xB3:    
       actuatorState = DUMPBUCKET;
       break;
     case 0xCA:
@@ -894,3 +1140,4 @@ void HandleInput (uint8_t device, uint8_t speed, uint8_t direction, uint8_t loby
       break;
   }
 }
+
