@@ -333,7 +333,13 @@ class Sequencer(Node):
 
         if not self._sleep(stage1_s):
             self._send_stop(); return False
-        return self._sleep(SETTLE_S)
+        if not self._sleep(SETTLE_S):
+            self._send_stop(); return False
+
+        # Turn commands on this firmware can continue running until STOPALL
+        # is sent, so explicitly stop before continuing to the next step.
+        self._send_stop()
+        return True
 
     def _do_actuator_position(self, p: dict) -> bool:
         target  = str(p.get("target", "drive")).lower().strip()
