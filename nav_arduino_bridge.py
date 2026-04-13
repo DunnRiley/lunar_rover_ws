@@ -5,7 +5,7 @@ nav_arduino_bridge.py  —  MINI PC
 Bridges /nav/arduino_dist_cmd  (Float32, metres)  -> 0xDC serial packet
 Bridges /nav/arduino_cmd       (Float32MultiArray) -> raw packet forwarder
 Bridges /nav/arduino_turn_cmd  (Float32MultiArray [arc_mm, speed, clockwise_int])
-                                -> 0xC8 + 0xC9 + turn-start (0xDD default)
+                                -> 0xC8 + 0xC9 + turn-start (0xE8 default)
 
 Publishes:
   /imu/gyro_deg_s  Float32MultiArray  [gx, gy, gz] from Serial2 telemetry
@@ -34,7 +34,7 @@ ENC_MARKER = 0xA5
 IMU_BYTES  = 24
 ENC_BYTES  = 2
 BAUD       = 115200
-TURN_START_DEFAULT = 0xDD
+TURN_START_DEFAULT = 0xE8
 
 
 def pkt(device, speed=0, direction=0, lobyte=0):
@@ -180,7 +180,7 @@ class Bridge(Node):
             # Load right wheel target
             self._write(pkt(0xC9, speed, r_db, r_lo))
             time.sleep(0.04)
-            # Start turn (new firmware uses 0xDD)
+            # Start turn (this firmware uses 0xE8 by default)
             self._write(pkt(start_cmd, 0, 0, 0))
 
         self.get_logger().info(
