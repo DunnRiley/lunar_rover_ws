@@ -5,7 +5,7 @@ nav_mission_sequencer.py  —  MINI PC
 
 IMPORTANT — HOW THIS WORKS
   This sequencer publishes to:
-    /nav/arduino_turn_cmd   (Float32MultiArray)  → bridge → C8+C9+start (0xDD default)
+    /nav/arduino_turn_cmd   (Float32MultiArray)  → bridge → C8+C9+start (0xE8 default)
     /nav/arduino_cmd        (Float32MultiArray)  → bridge → raw packet
   Distance commands are sent as raw 0xDC so mission speed is honored.
 
@@ -54,7 +54,7 @@ SETTLE_S           = 2.0     # extra seconds after time estimate before declarin
 MAX_SPEED          = 190     # Arduino firmware cap for encoder commands
 FLIP_TURN_DIR      = False   # set True if CW/CCW are backwards on your robot
 ACT_TIMEOUT_S      = 20.0    # how long to wait for an actuator preset to complete
-TURN_START_CMD     = 0xDD    # new firmware turn start command
+TURN_START_CMD     = 0xE8    # turn start command used by current Arduino firmware
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -99,7 +99,7 @@ class Sequencer(Node):
         self.get_logger().info(f"  SETTLE_S          = {SETTLE_S} s")
         self.get_logger().info(f"  FLIP_TURN_DIR     = {FLIP_TURN_DIR}")
         self.get_logger().info("  Publishes to /nav/arduino_turn_cmd and /nav/arduino_cmd")
-        self.get_logger().info("  (uses raw 0xDC for distance + 0xDD turn-start by default)")
+        self.get_logger().info("  (uses raw 0xDC for distance + 0xE8 turn-start by default)")
         self.get_logger().info("  nav_arduino_bridge.py must be running!")
         self.get_logger().info("  Waiting for /mission/start True ...")
         self.get_logger().info("=" * 60)
