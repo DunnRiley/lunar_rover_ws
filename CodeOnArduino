@@ -534,6 +534,10 @@ void updateDriveDistancebr(){
     STOPALL();
     return;
   }
+
+  if (millis() - ddStartMsbr >= DD_TIMEOUT_MS || millis() - ddStartMsbl >= DD_TIMEOUT_MS ) {
+    STOPALL();
+  }
 }
 
 void updateDriveDistancebl() {
