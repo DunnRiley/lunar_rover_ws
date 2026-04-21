@@ -49,8 +49,8 @@ STOP_FF        = 0xFF
 STOP_B4        = 0xB4
 
 ACT_DIG        = 0xA7
+ACT_DIG_2      = 0x93
 ACT_DRIVE_POS  = 0xA9
-ACT_DUMP       = 0xB3
 ACT_CAL        = 0xCA
 REQ_TELEM      = 0xD1
 
@@ -133,8 +133,14 @@ def stop() -> bytes:
 
 
 def actuator_preset(target: str) -> bytes:
-    """target = 'dig', 'drive', or 'dump'"""
-    d = {'dig': ACT_DIG, 'drive': ACT_DRIVE_POS, 'dump': ACT_DUMP}.get(target.lower())
+    """target = 'dig1', 'dig2', 'drive', or 'calibrate'"""
+    d = {
+        'dig': ACT_DIG,  # backward-compatible alias for dig1
+        'dig1': ACT_DIG,
+        'dig2': ACT_DIG_2,
+        'drive': ACT_DRIVE_POS,
+        'calibrate': ACT_CAL,
+    }.get(target.lower())
     if d is None:
         raise ValueError(f"Bad actuator target '{target}'")
     return pkt(d)
