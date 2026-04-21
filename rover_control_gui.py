@@ -224,7 +224,7 @@ class GUI(QMainWindow):
         tv = QVBoxLayout(tg); tv.setSpacing(5)
         tv.addWidget(QLabel(
             "L-stick Y = left wheels    R-stick Y = right wheels\n"
-            "A=DUMP  Y=DRIVE  B=DIG  X=CAL    D-pad UP/DOWN=actuator hold    "
+            "A=DIG2  Y=DRIVE  B=DIG1  X=CAL    D-pad UP/DOWN=actuator hold    "
             "D-pad LR=servo hold\n"
             "LB=L speed+    LT=L speed-    RB=R speed+    RT=R speed-    "
             "Start=e-stop toggle"))
@@ -343,7 +343,7 @@ class GUI(QMainWindow):
         # ── ACTUATOR ───────────────────────────────────────────────────────────
         ag = QGroupBox("ACTUATOR")
         av = QHBoxLayout(ag)
-        for lbl, cmd in [("DIG",0xA7),("DRIVE POS",0xA9),("DUMP",0xB3),("CALIBRATE",0xCA)]:
+        for lbl, cmd in [("DIG 1",0xA7),("DIG 2",0x93),("DRIVE POS",0xA9),("CALIBRATE",0xCA)]:
             b2 = btn(lbl,"#1a1028","#3a1060","#7030c0",h=36,w=110)
             b2.clicked.connect(lambda _,c=cmd: self._send_raw_cmd(c,0,0,0))
             av.addWidget(b2)

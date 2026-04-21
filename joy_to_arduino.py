@@ -12,7 +12,7 @@ Speed:
   RB (btn 5) -> right up            RT (axis 5) -> right down
 
 Actuators:
-  A (btn 0) -> DUMP    Y (btn 3) -> DRIVE    B (btn 1) -> DIG    X (btn 2) -> CAL
+  A (btn 0) -> DIG 2   Y (btn 3) -> DRIVE    B (btn 1) -> DIG 1   X (btn 2) -> CAL
   D-pad UP -> extend (hold)   D-pad DOWN -> retract (hold)
 
 Servo:
@@ -49,8 +49,8 @@ DEV_ACT   = 0x08
 DEV_SERVO = 0x11
 DEV_KILL  = 0xFF
 CMD_DIG   = 0xA7
+CMD_DIG2  = 0x93
 CMD_DRIVE = 0xA9
-CMD_DUMP  = 0xB3
 CMD_CAL   = 0xCA
 SERVO_STOP, SERVO_CCW, SERVO_CW = 90, 45, 135
 
@@ -104,7 +104,7 @@ class JoyArduino(Node):
         self.get_logger().info("=" * 52)
         self.get_logger().info(f"  joy_to_arduino  port={port}")
         self.get_logger().info("  L-stick Y=left  R-stick Y=right  (tank)")
-        self.get_logger().info("  A=DUMP Y=DRIVE B=DIG X=CAL")
+        self.get_logger().info("  A=DIG2 Y=DRIVE B=DIG1 X=CAL")
         self.get_logger().info("  LB/LT=L-speed  RB/RT=R-speed")
         self.get_logger().info("  D-pad UD=actuator  LR=servo")
         self.get_logger().info("  Start=estop")
@@ -202,11 +202,11 @@ class JoyArduino(Node):
 
         # Actuator presets
         if self._rising(BTN_A, btn(BTN_A)):
-            with self._lock: self._send(CMD_DUMP); self.get_logger().info("Act->DUMP")
+            with self._lock: self._send(CMD_DIG2); self.get_logger().info("Act->DIG2")
         if self._rising(BTN_Y, btn(BTN_Y)):
             with self._lock: self._send(CMD_DRIVE); self.get_logger().info("Act->DRIVE")
         if self._rising(BTN_B, btn(BTN_B)):
-            with self._lock: self._send(CMD_DIG); self.get_logger().info("Act->DIG")
+            with self._lock: self._send(CMD_DIG); self.get_logger().info("Act->DIG1")
         if self._rising(BTN_X, btn(BTN_X)):
             with self._lock: self._send(CMD_CAL); self.get_logger().warn("Act CAL")
 
