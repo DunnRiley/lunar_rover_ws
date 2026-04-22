@@ -39,7 +39,7 @@ ACTION_DEFAULTS = {
     "drive_forward":     {"distance_m": 1.0, "speed": 120, "timeout_s": 60},
     "drive_backward":    {"distance_m": 0.5, "speed": 120, "timeout_s": 60},
     "pivot_turn":        {"degrees": 90.0,   "speed": 100, "timeout_s": 60},
-    "actuator_position": {"target": "dig",   "timeout_s": 12},
+    "actuator_position": {"target": "dig1",  "timeout_s": 12},
     "wait":              {"seconds": 1.0},
     "stop":              {},
 }
@@ -481,7 +481,7 @@ class GUI(QMainWindow):
             lbl.setStyleSheet("color:#6080a0;font-size:12px;min-width:120px;")
             row.addWidget(lbl)
             if key == "target":
-                cb = QComboBox(); cb.addItems(["dig","drive","dump"])
+                cb = QComboBox(); cb.addItems(["dig1", "dig2", "drive", "calibrate"])
                 cb.setCurrentText(str(default)); cb.setFixedHeight(28)
                 row.addWidget(cb); self._param_wids[key] = cb
             elif isinstance(default, bool):

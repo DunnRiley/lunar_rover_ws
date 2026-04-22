@@ -347,10 +347,18 @@ class Sequencer(Node):
 
         if self._aborted(): return False
 
-        dev = {"dig": 0xA7, "drive": 0xA9, "dump": 0xB3}.get(target)
+        dev = {
+            "dig": 0xA7,          # backward-compatible alias for dig1
+            "dig1": 0xA7,
+            "dig2": 0x93,
+            "drive": 0xA9,
+            "calibrate": 0xCA,
+            "dump": 0xCA,         # backward-compatible alias for calibrate
+        }.get(target)
         if dev is None:
             self.get_logger().error(
-                f"   Unknown actuator target '{target}'  (use: dig, drive, dump)")
+                f"   Unknown actuator target '{target}'  "
+                f"(use: dig1, dig2, drive, calibrate)")
             return False
 
         self.get_logger().info(
