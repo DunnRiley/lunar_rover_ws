@@ -39,7 +39,7 @@ ACTION_DEFAULTS = {
     "drive_forward":     {"distance_m": 1.0, "speed": 120, "timeout_s": 60},
     "drive_backward":    {"distance_m": 0.5, "speed": 120, "timeout_s": 60},
     "pivot_turn":        {"degrees": 90.0,   "speed": 100, "timeout_s": 60},
-    "actuator_position": {"target": "dig",   "timeout_s": 12},
+    "actuator_position": {"target": "dig1",  "timeout_s": 12},
     "wait":              {"seconds": 1.0},
     "stop":              {},
 }
@@ -224,7 +224,7 @@ class GUI(QMainWindow):
         tv = QVBoxLayout(tg); tv.setSpacing(5)
         tv.addWidget(QLabel(
             "L-stick Y = left wheels    R-stick Y = right wheels\n"
-            "A=DUMP  Y=DRIVE  B=DIG  X=CAL    D-pad UP/DOWN=actuator hold    "
+            "A=DIG2  Y=DRIVE  B=DIG1  X=CAL    D-pad UP/DOWN=actuator hold    "
             "D-pad LR=servo hold\n"
             "LB=L speed+    LT=L speed-    RB=R speed+    RT=R speed-    "
             "Start=e-stop toggle"))
@@ -343,7 +343,7 @@ class GUI(QMainWindow):
         # ── ACTUATOR ───────────────────────────────────────────────────────────
         ag = QGroupBox("ACTUATOR")
         av = QHBoxLayout(ag)
-        for lbl, cmd in [("DIG",0xA7),("DRIVE POS",0xA9),("DUMP",0xB3),("CALIBRATE",0xCA)]:
+        for lbl, cmd in [("DIG 1",0xA7),("DIG 2",0x93),("DRIVE POS",0xA9),("CALIBRATE",0xCA)]:
             b2 = btn(lbl,"#1a1028","#3a1060","#7030c0",h=36,w=110)
             b2.clicked.connect(lambda _,c=cmd: self._send_raw_cmd(c,0,0,0))
             av.addWidget(b2)
@@ -481,7 +481,7 @@ class GUI(QMainWindow):
             lbl.setStyleSheet("color:#6080a0;font-size:12px;min-width:120px;")
             row.addWidget(lbl)
             if key == "target":
-                cb = QComboBox(); cb.addItems(["dig","drive","dump"])
+                cb = QComboBox(); cb.addItems(["dig1", "dig2", "drive", "calibrate"])
                 cb.setCurrentText(str(default)); cb.setFixedHeight(28)
                 row.addWidget(cb); self._param_wids[key] = cb
             elif isinstance(default, bool):
