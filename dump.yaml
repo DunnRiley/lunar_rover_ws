@@ -1,0 +1,30 @@
+mission:
+  name: "Construction run DUMP"
+  steps:
+  # Aproch
+  - action: drive_forward
+    params:
+      distance_m: 0.5
+      use_camera: false
+      timeout_s: 15
+  # Dump
+  - action: actuator_position
+    params:
+      target: dump
+      timeout_s: 20
+  # Delay
+  - action: wait
+    params:
+      seconds: 0.5
+  - action: actuator_position
+    params:
+      target: drive
+      timeout_s: 8
+  # Leave the area
+  - action: drive_backward
+    params:
+      distance_m: 0.5
+      use_camera: false
+      timeout_s: 15
+  # End
+  - action: stop
