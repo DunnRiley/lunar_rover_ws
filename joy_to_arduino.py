@@ -1,28 +1,4 @@
 #!/usr/bin/env python3
-"""
-joy_to_arduino.py  —  MINI PC
-Translates joystick to Arduino serial.  7-byte packet format.
-
-Tank drive:
-  Left  stick Y (axis 1) -> left  wheels
-  Right stick Y (axis 4) -> right wheels
-
-Speed:
-  LB (btn 4) -> left  up  (+5%)     LT (axis 2) -> left  down
-  RB (btn 5) -> right up            RT (axis 5) -> right down
-
-Actuators:
-  A (btn 0) -> DIG 2   Y (btn 3) -> DRIVE    B (btn 1) -> DIG 1   X (btn 2) -> CAL
-  D-pad UP -> extend (hold)   D-pad DOWN -> retract (hold)
-
-Servo:
-  D-pad RIGHT -> CW (hold)   D-pad LEFT -> CCW (hold)
-
-Start btn 7 -> emergency stop toggle
-
-Publish /joy_arduino_status (String) every 5s for the GUI.
-"""
-
 import glob
 import json
 import threading

@@ -222,7 +222,7 @@ void setup() {
   SPI.begin();
   COUNTS_PER_MM = (16384.0f * GEAR_RATIO) / (3.14159265f * WHEEL_DIAMETER_MM);
   zeroBLEncoder();
-  wdt_enable(WDTO_25);
+  wdt_enable(WDTO_250MS);
   wdt_reset();
 }
 
