@@ -33,9 +33,9 @@ SERVO_STOP, SERVO_CCW, SERVO_CW = 90, 45, 135
 # ── Mapping ───────────────────────────────────────────────────────────────────
 AXIS_LEFT  = 1
 AXIS_RIGHT = 4
+BTN_LB, BTN_RB = 4, 5
 AXIS_LT    = 2
 AXIS_RT    = 5
-BTN_LB, BTN_RB = 4, 5
 BTN_A, BTN_Y, BTN_B, BTN_X, BTN_START = 0, 3, 1, 2, 7
 DPAD_LR = 6
 DPAD_UD = 7
@@ -60,8 +60,6 @@ class JoyArduino(Node):
         self._estop = False
         self._last_joy = self.get_clock().now()
         self._prev_btns = {}
-        self._prev_dpad_lr = 0.0
-        self._prev_dpad_ud = 0.0
         self._lt_prev = 1.0; self._rt_prev = 1.0
         self._last_l = (0,0); self._last_r = (0,0)
         self._last_write = 0.0
@@ -81,8 +79,8 @@ class JoyArduino(Node):
         self.get_logger().info(f"  joy_to_arduino  port={port}")
         self.get_logger().info("  L-stick Y=left  R-stick Y=right  (tank)")
         self.get_logger().info("  A=DIG2 Y=DRIVE B=DIG1 X=CAL")
-        self.get_logger().info("  LB/LT=L-speed  RB/RT=R-speed")
-        self.get_logger().info("  D-pad UD=actuator  LR=servo")
+        self.get_logger().info("  LT/RT=actuator hold  LB/RB=servo hold")
+        self.get_logger().info("  (D-pad unused; known unreliable on this controller)")
         self.get_logger().info("  Start=estop")
         self.get_logger().info("=" * 52)
 
@@ -158,23 +156,27 @@ class JoyArduino(Node):
         if self._estop:
             return
 
-        # Speed
-        if self._rising(BTN_LB, btn(BTN_LB)):
-            self._spd_l = round(min(1.0, self._spd_l + SPEED_STEP), 2)
-            self.get_logger().info(f"L speed {self._spd_l:.2f}")
-        if self._rising(BTN_RB, btn(BTN_RB)):
-            self._spd_r = round(min(1.0, self._spd_r + SPEED_STEP), 2)
-            self.get_logger().info(f"R speed {self._spd_r:.2f}")
+        # Actuator manual (triggers, hold)
         lt = ax(AXIS_LT)
-        if lt < TRIG_TH and self._lt_prev >= TRIG_TH:
-            self._spd_l = round(max(0.05, self._spd_l - SPEED_STEP), 2)
-            self.get_logger().info(f"L speed {self._spd_l:.2f}")
-        self._lt_prev = lt
         rt = ax(AXIS_RT)
-        if rt < TRIG_TH and self._rt_prev >= TRIG_TH:
-            self._spd_r = round(max(0.05, self._spd_r - SPEED_STEP), 2)
-            self.get_logger().info(f"R speed {self._spd_r:.2f}")
-        self._rt_prev = rt
+        lt_pressed = lt < TRIG_TH
+        rt_pressed = rt < TRIG_TH
+        if lt_pressed and not rt_pressed:
+            with self._lock: self._send(DEV_ACT, 190, 1)
+        elif rt_pressed and not lt_pressed:
+            with self._lock: self._send(DEV_ACT, 190, 0)
+        else:
+            with self._lock: self._send(DEV_ACT, 0, 0)
+
+        # Servo manual (360 servo on bumpers, hold)
+        lb = btn(BTN_LB)
+        rb = btn(BTN_RB)
+        if lb and not rb:
+            with self._lock: self._send(DEV_SERVO, SERVO_CCW)
+        elif rb and not lb:
+            with self._lock: self._send(DEV_SERVO, SERVO_CW)
+        else:
+            with self._lock: self._send(DEV_SERVO, SERVO_STOP)
 
         # Actuator presets
         if self._rising(BTN_A, btn(BTN_A)):
@@ -185,26 +187,6 @@ class JoyArduino(Node):
             with self._lock: self._send(CMD_DIG); self.get_logger().info("Act->DIG1")
         if self._rising(BTN_X, btn(BTN_X)):
             with self._lock: self._send(CMD_CAL); self.get_logger().warn("Act CAL")
-
-        # Servo (D-pad LR, hold)
-        cur_lr = ax(DPAD_LR)
-        if   cur_lr >  0.5 and self._prev_dpad_lr <=  0.5:
-            with self._lock: self._send(DEV_SERVO, SERVO_CW)
-        elif cur_lr < -0.5 and self._prev_dpad_lr >= -0.5:
-            with self._lock: self._send(DEV_SERVO, SERVO_CCW)
-        elif abs(cur_lr) < 0.5 and abs(self._prev_dpad_lr) > 0.5:
-            with self._lock: self._send(DEV_SERVO, SERVO_STOP)
-        self._prev_dpad_lr = cur_lr
-
-        # Actuator manual (D-pad UD, hold)
-        cur_ud = ax(DPAD_UD)
-        if   cur_ud >  0.5 and self._prev_dpad_ud <=  0.5:
-            with self._lock: self._send(DEV_ACT, 190, 0)
-        elif cur_ud < -0.5 and self._prev_dpad_ud >= -0.5:
-            with self._lock: self._send(DEV_ACT, 190, 1)
-        elif abs(cur_ud) < 0.5 and abs(self._prev_dpad_ud) > 0.5:
-            with self._lock: self._send(DEV_ACT, 0, 0)
-        self._prev_dpad_ud = cur_ud
 
         # Tank drive
         l = self._dz(ax(AXIS_LEFT)); r = self._dz(ax(AXIS_RIGHT))
