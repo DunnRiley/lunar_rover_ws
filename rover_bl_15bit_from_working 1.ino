@@ -66,13 +66,13 @@ int16_t drivemin = 30775;
 int16_t drivemax = 30725;
 
 int16_t digmax2 = 28750;
-int16_t digmin2 = 28800;
+int16_t digmin2 = 28750;
 
 int16_t dumpmax = 32500;
 int16_t dumpmin = 32000;
 
 int16_t digmin = 28950;
-int16_t digmax = 29050;
+int16_t digmax = 28950;
 
 enum ActuatorState {CALIBRATE, DUMPBUCKET, DRIVEPOSITION, DIGPOSITION,DIGPOSITION2, STOP};
 ActuatorState actuatorState = STOP;
