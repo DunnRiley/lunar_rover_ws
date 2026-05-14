@@ -28,6 +28,7 @@ CMD_DIG   = 0xA7
 CMD_DIG2  = 0x93
 CMD_DRIVE = 0xA9
 CMD_CAL   = 0xCA
+CMD_DUMP  = 0xB3
 SERVO_STOP, SERVO_CCW, SERVO_CW = 90, 45, 135
 
 # ── Mapping ───────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ class JoyArduino(Node):
         self._prev_btns = {}
         self._lt_prev = 1.0; self._rt_prev = 1.0
         self._last_l = (0,0); self._last_r = (0,0)
+        self._neutral_repeats = 0
         self._last_write = 0.0
         self._joy_n = 0
 
@@ -107,6 +109,7 @@ class JoyArduino(Node):
         with self._lock:
             self._send(DEV_KILL)
         self._last_l = (0,0); self._last_r = (0,0)
+        self._neutral_repeats = 0
 
     def _sd(self, v, flip=False):
         sp = min(int(abs(v) * MAX_MOTOR), MAX_MOTOR)
@@ -122,13 +125,16 @@ class JoyArduino(Node):
                 self._send(DEV_LEFT,  l[0], l[1])
                 self._send(DEV_RIGHT, r[0], r[1])
             self._last_l = l; self._last_r = r; self._last_write = now
+            self._neutral_repeats = 0
 
     def _stop_drive(self):
-        if self._last_l != (0,0) or self._last_r != (0,0):
+        # Send repeated neutral packets to guard against occasional serial drops.
+        if self._last_l != (0,0) or self._last_r != (0,0) or self._neutral_repeats < 2:
             with self._lock:
                 self._send(DEV_LEFT, 0, 0)
                 self._send(DEV_RIGHT, 0, 0)
             self._last_l = (0,0); self._last_r = (0,0)
+            self._neutral_repeats += 1
 
     def _dz(self, v): return v if abs(v) >= DEADZONE else 0.0
 
@@ -178,6 +184,16 @@ class JoyArduino(Node):
         else:
             with self._lock: self._send(DEV_SERVO, SERVO_STOP)
 
+    def _send_calibrate_dump(self):
+        # Some firmware builds bind retract/evening behavior to CAL (0xCA),
+        # others to DUMP (0xB3). Send both so calibration works reliably.
+        with self._lock:
+            self._send(CMD_CAL)
+        time.sleep(0.03)
+        with self._lock:
+            self._send(CMD_DUMP)
+        self.get_logger().warn("Act CAL/DUMP sequence sent (0xCA -> 0xB3)")
+
         # Actuator presets
         if self._rising(BTN_A, btn(BTN_A)):
             with self._lock: self._send(CMD_DIG2); self.get_logger().info("Act->DIG2")
@@ -186,7 +202,7 @@ class JoyArduino(Node):
         if self._rising(BTN_B, btn(BTN_B)):
             with self._lock: self._send(CMD_DIG); self.get_logger().info("Act->DIG1")
         if self._rising(BTN_X, btn(BTN_X)):
-            with self._lock: self._send(CMD_CAL); self.get_logger().warn("Act CAL")
+            self._send_calibrate_dump()
 
         # Tank drive
         l = self._dz(ax(AXIS_LEFT)); r = self._dz(ax(AXIS_RIGHT))

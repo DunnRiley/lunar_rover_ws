@@ -353,9 +353,9 @@ class GUI(QMainWindow):
         # ── ACTUATOR ───────────────────────────────────────────────────────────
         ag = QGroupBox("ACTUATOR")
         av = QHBoxLayout(ag)
-        for lbl, cmd in [("DIG 1",0xA7),("DIG 2",0x93),("DRIVE POS",0xA9),("CALIBRATE",0xCA)]:
+        for lbl, cmd in [("DIG 1",0xA7),("DIG 2",0x93),("DRIVE POS",0xA9),("CAL/DUMP",0xCA)]:
             b2 = btn(lbl,"#1a1028","#3a1060","#7030c0",h=36,w=110)
-            b2.clicked.connect(lambda _,c=cmd: self._send_raw_cmd(c,0,0,0))
+            b2.clicked.connect((lambda _=False: self._send_cal_dump()) if cmd == 0xCA else (lambda _,c=cmd: self._send_raw_cmd(c,0,0,0)))
             av.addWidget(b2)
         av.addStretch()
         root.addWidget(ag)
@@ -756,6 +756,20 @@ class GUI(QMainWindow):
             self._log(f"Abort {'sent' if ok else 'failed'}")
         threading.Thread(target=_send, daemon=True).start()
         self._mstatus.setText("Aborted"); self._mprog.setValue(0)
+
+
+    def _send_cal_dump(self):
+        """Send calibrate+dump sequence for firmware variants."""
+        self._ensure_pubs()
+        if not ROS_AVAILABLE or self._cmd_pub is None:
+            self._log("ROS unavailable"); return
+
+        def _send():
+            self._send_raw_cmd(0xCA, 0, 0, 0)
+            time.sleep(0.05)
+            self._send_raw_cmd(0xB3, 0, 0, 0)
+            self._log("Actuator CAL/DUMP sent (0xCA -> 0xB3)")
+        threading.Thread(target=_send, daemon=True).start()
 
     # ═════════════════════════════════════════════════════════════════════════
     # QUICK COMMANDS
