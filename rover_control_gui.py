@@ -76,6 +76,7 @@ def btn(text, bg, border, hover, h=34, w=None):
 
 class RosMonitor(QThread):
     mission_status = pyqtSignal(dict)
+    encoder_raw = pyqtSignal(float)
     def __init__(self):
         super().__init__(); self._running = False
     def run(self):
@@ -90,6 +91,8 @@ class RosMonitor(QThread):
                 try: self.mission_status.emit(json.loads(msg.data))
                 except: pass
             node.create_subscription(String, "/mission/status", _cb, q)
+            node.create_subscription(Float32, "/nav/encoder_raw",
+                                     lambda m: self.encoder_raw.emit(float(m.data)), q)
             self._running = True
             from rclpy.executors import SingleThreadedExecutor
             ex = SingleThreadedExecutor(); ex.add_node(node)
@@ -224,10 +227,10 @@ class GUI(QMainWindow):
         tv = QVBoxLayout(tg); tv.setSpacing(5)
         tv.addWidget(QLabel(
             "L-stick Y = left wheels    R-stick Y = right wheels\n"
-            "A=DIG2  Y=DRIVE  B=DIG1  X=CAL    D-pad UP/DOWN=actuator hold    "
-            "D-pad LR=servo hold\n"
-            "LB=L speed+    LT=L speed-    RB=R speed+    RT=R speed-    "
-            "Start=e-stop toggle"))
+            "A=DIG2  Y=DRIVE  B=DIG1  X=CAL\n"
+            "LT/RT = actuator hold (one direction each)    "
+            "LB/RB = 360-servo hold (one direction each)\n"
+            "Start = e-stop toggle"))
         joy_row = QHBoxLayout()
         self._joy_led = LED("off")
         self._joy_lbl = QLabel("not running")
@@ -238,6 +241,13 @@ class GUI(QMainWindow):
         b_stop  = btn("STOP TELEOP", "#1a0808","#501010","#a02020", h=40, w=140)
         b_stop.clicked.connect(self._stop_teleop);  joy_row.addWidget(b_stop)
         tv.addLayout(joy_row)
+        enc_row = QHBoxLayout()
+        enc_row.addWidget(QLabel("Encoder distance/raw:"))
+        self._enc_lbl = QLabel("--")
+        self._enc_lbl.setStyleSheet("color:#50a0c8;font-weight:bold;")
+        enc_row.addWidget(self._enc_lbl)
+        enc_row.addStretch()
+        tv.addLayout(enc_row)
         root.addWidget(tg)
 
         # ── QUICK DRIVE ────────────────────────────────────────────────────────
@@ -978,6 +988,7 @@ class GUI(QMainWindow):
     def _start_ros_monitor(self):
         self._ros_mon = RosMonitor()
         self._ros_mon.mission_status.connect(self._on_mission_status)
+        self._ros_mon.encoder_raw.connect(self._on_encoder_raw)
         self._ros_mon.start()
 
     @pyqtSlot(dict)
@@ -988,6 +999,10 @@ class GUI(QMainWindow):
         self._mstatus.setText(
             f"Step {step+1}/{total}: {name}" if run
             else ("Complete" if step > 0 and total > 0 else "Idle"))
+
+    @pyqtSlot(float)
+    def _on_encoder_raw(self, val):
+        self._enc_lbl.setText(f"{val:.2f}")
 
     # ═════════════════════════════════════════════════════════════════════════
     # CONN CHECK + LOG
