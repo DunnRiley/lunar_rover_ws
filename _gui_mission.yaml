@@ -21,7 +21,21 @@ mission:
       timeout_s: 15
   - action: actuator_position
     params:
+      target: dig2
+      timeout_s: 8
+  - action: drive_backward
+    params:
+      distance_m: 0.5
+      use_camera: false
+      timeout_s: 15
+  - action: actuator_position
+    params:
       target: drive
       timeout_s: 8
+  - action: drive_forward
+    params:
+      distance_m: 1.0
+      use_camera: false
+      timeout_s: 15
   - action: stop
     params: {}

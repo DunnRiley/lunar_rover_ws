@@ -21,9 +21,6 @@ bash ~/lunar_rover_ws/restart_rear_camera.sh
 bash ~/lunar_rover_ws/run_mission.sh --dry-run mission.yaml
 bash ~/lunar_rover_ws/run_mission.sh
 
-## Arduino Changing
-arduino-cli compile --upload -p /dev/ttyACM0 --fqbn arduino:avr:mega .
-
 ## Speaker
 # Note A4
 speaker-test -t sine -f 440
