@@ -28,22 +28,18 @@ CMD_DIG   = 0xA7
 CMD_DIG2  = 0x93
 CMD_DRIVE = 0xA9
 CMD_CAL   = 0xCA
-CMD_DUMP  = 0xB3
 SERVO_STOP, SERVO_CCW, SERVO_CW = 90, 45, 135
 
 # ── Mapping ───────────────────────────────────────────────────────────────────
 AXIS_LEFT  = 1
 AXIS_RIGHT = 4
 BTN_LB, BTN_RB = 4, 5
+BTN_A, BTN_Y, BTN_B, BTN_X, BTN_START = 0, 3, 1, 2, 7
 AXIS_LT    = 2
 AXIS_RT    = 5
-BTN_A, BTN_Y, BTN_B, BTN_X, BTN_START = 0, 3, 1, 2, 7
-DPAD_LR = 6
-DPAD_UD = 7
 TRIG_TH = 0.5
 DEADZONE = 0.10
 MAX_MOTOR = 190
-SPEED_STEP = 0.05
 JOY_TIMEOUT_S = 0.5
 RIGHT_FLIP = False   # compensates for invertRightDriveDirection=True in firmware
 
@@ -57,13 +53,12 @@ class JoyArduino(Node):
         self._lock = threading.Lock()
         self._connect(port)
 
-        self._spd_l = 1.0; self._spd_r = 1.0
         self._estop = False
         self._last_joy = self.get_clock().now()
         self._prev_btns = {}
+        self._prev_lb = 0; self._prev_rb = 0
         self._lt_prev = 1.0; self._rt_prev = 1.0
         self._last_l = (0,0); self._last_r = (0,0)
-        self._neutral_repeats = 0
         self._last_write = 0.0
         self._joy_n = 0
 
@@ -81,8 +76,7 @@ class JoyArduino(Node):
         self.get_logger().info(f"  joy_to_arduino  port={port}")
         self.get_logger().info("  L-stick Y=left  R-stick Y=right  (tank)")
         self.get_logger().info("  A=DIG2 Y=DRIVE B=DIG1 X=CAL")
-        self.get_logger().info("  LT/RT=actuator hold  LB/RB=servo hold")
-        self.get_logger().info("  (D-pad unused; known unreliable on this controller)")
+        self.get_logger().info("  LT/RT=actuator up/down  LB/RB=servo CW/CCW")
         self.get_logger().info("  Start=estop")
         self.get_logger().info("=" * 52)
 
@@ -109,7 +103,6 @@ class JoyArduino(Node):
         with self._lock:
             self._send(DEV_KILL)
         self._last_l = (0,0); self._last_r = (0,0)
-        self._neutral_repeats = 0
 
     def _sd(self, v, flip=False):
         sp = min(int(abs(v) * MAX_MOTOR), MAX_MOTOR)
@@ -125,16 +118,13 @@ class JoyArduino(Node):
                 self._send(DEV_LEFT,  l[0], l[1])
                 self._send(DEV_RIGHT, r[0], r[1])
             self._last_l = l; self._last_r = r; self._last_write = now
-            self._neutral_repeats = 0
 
     def _stop_drive(self):
-        # Send repeated neutral packets to guard against occasional serial drops.
-        if self._last_l != (0,0) or self._last_r != (0,0) or self._neutral_repeats < 2:
+        if self._last_l != (0,0) or self._last_r != (0,0):
             with self._lock:
                 self._send(DEV_LEFT, 0, 0)
                 self._send(DEV_RIGHT, 0, 0)
             self._last_l = (0,0); self._last_r = (0,0)
-            self._neutral_repeats += 1
 
     def _dz(self, v): return v if abs(v) >= DEADZONE else 0.0
 
@@ -162,39 +152,33 @@ class JoyArduino(Node):
         if self._estop:
             return
 
-        # Actuator manual (triggers, hold)
-        lt = ax(AXIS_LT)
-        rt = ax(AXIS_RT)
-        lt_pressed = lt < TRIG_TH
-        rt_pressed = rt < TRIG_TH
-        if lt_pressed and not rt_pressed:
-            with self._lock: self._send(DEV_ACT, 190, 1)
-        elif rt_pressed and not lt_pressed:
-            with self._lock: self._send(DEV_ACT, 190, 0)
-        else:
-            with self._lock: self._send(DEV_ACT, 0, 0)
-
-        # Servo manual (360 servo on bumpers, hold)
-        lb = btn(BTN_LB)
-        rb = btn(BTN_RB)
-        if lb and not rb:
+        # Servo (LB/RB bumpers, hold)
+        cur_lb = btn(BTN_LB); cur_rb = btn(BTN_RB)
+        if   cur_lb == 1 and self._prev_lb == 0:
             with self._lock: self._send(DEV_SERVO, SERVO_CCW)
-        elif rb and not lb:
-            with self._lock: self._send(DEV_SERVO, SERVO_CW)
-        else:
+        elif cur_lb == 0 and self._prev_lb == 1:
             with self._lock: self._send(DEV_SERVO, SERVO_STOP)
+        self._prev_lb = cur_lb
 
-    def _send_calibrate_dump(self):
-        # Some firmware builds bind retract/evening behavior to CAL (0xCA),
-        # others to DUMP (0xB3). Send both so calibration works reliably.
-        with self._lock:
-            self._send(CMD_CAL)
-        time.sleep(0.03)
-        with self._lock:
-            self._send(CMD_DUMP)
-        self.get_logger().warn("Act CAL/DUMP sequence sent (0xCA -> 0xB3)")
+        if   cur_rb == 1 and self._prev_rb == 0:
+            with self._lock: self._send(DEV_SERVO, SERVO_CW)
+        elif cur_rb == 0 and self._prev_rb == 1:
+            with self._lock: self._send(DEV_SERVO, SERVO_STOP)
+        self._prev_rb = cur_rb
 
-        # Actuator presets
+        # Actuator manual (LT/RT triggers, hold)
+        lt = ax(AXIS_LT); rt = ax(AXIS_RT)
+        if   lt < TRIG_TH and self._lt_prev >= TRIG_TH:
+            with self._lock: self._send(DEV_ACT, 190, 0)
+        elif lt >= TRIG_TH and self._lt_prev < TRIG_TH:
+            with self._lock: self._send(DEV_ACT, 0, 0)
+        self._lt_prev = lt
+
+        if   rt < TRIG_TH and self._rt_prev >= TRIG_TH:
+            with self._lock: self._send(DEV_ACT, 190, 1)
+        elif rt >= TRIG_TH and self._rt_prev < TRIG_TH:
+            with self._lock: self._send(DEV_ACT, 0, 0)
+        self._rt_prev = rt
         if self._rising(BTN_A, btn(BTN_A)):
             with self._lock: self._send(CMD_DIG2); self.get_logger().info("Act->DIG2")
         if self._rising(BTN_Y, btn(BTN_Y)):
@@ -202,14 +186,14 @@ class JoyArduino(Node):
         if self._rising(BTN_B, btn(BTN_B)):
             with self._lock: self._send(CMD_DIG); self.get_logger().info("Act->DIG1")
         if self._rising(BTN_X, btn(BTN_X)):
-            self._send_calibrate_dump()
+            with self._lock: self._send(CMD_CAL); self.get_logger().warn("Act CAL")
 
         # Tank drive
         l = self._dz(ax(AXIS_LEFT)); r = self._dz(ax(AXIS_RIGHT))
         if abs(l) < 0.001 and abs(r) < 0.001:
             self._stop_drive()
         else:
-            self._drive(l * self._spd_l, r * self._spd_r)
+            self._drive(l, r)
 
     def _watchdog(self):
         if self._ser is None or not self._ser.is_open:
@@ -227,16 +211,14 @@ class JoyArduino(Node):
         age = (self.get_clock().now() - self._last_joy).nanoseconds / 1e9
         msg = String()
         msg.data = json.dumps({
-            "serial": ok, "spd_L": round(self._spd_l,2),
-            "spd_R": round(self._spd_r,2), "estop": self._estop,
+            "serial": ok, "estop": self._estop,
             "last_joy_s": round(age,1), "joy_msgs": self._joy_n,
         })
         self._stat_pub.publish(msg)
         if self._joy_n == 0:
             self.get_logger().warn("No /joy — is joy_node running?")
         self.get_logger().info(
-            f"serial={ok} spd={self._spd_l:.2f}/{self._spd_r:.2f} "
-            f"joy={self._joy_n}/5s age={age:.1f}s estop={self._estop}")
+            f"serial={ok} joy={self._joy_n}/5s age={age:.1f}s estop={self._estop}")
         self._joy_n = 0
 
     def _estop_cb(self, msg: Bool):

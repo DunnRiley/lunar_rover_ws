@@ -4,7 +4,7 @@ mission:
   # Aproch
   - action: drive_forward
     params:
-      distance_m: 0.5
+      distance_m: 0.7
       use_camera: false
       timeout_s: 15
   # Dump
@@ -12,10 +12,18 @@ mission:
     params:
       target: dump
       timeout_s: 20
-  # Delay
-  - action: wait
+  # Shake dat ass
+  - action: drive_backward
     params:
-      seconds: 0.5
+      distance_m: 0.15
+      use_camera: false
+      timeout_s: 5
+  - action: drive_forward
+    params:
+      distance_m: 0.15
+      use_camera: false
+      timeout_s: 5
+  # Set pose to drive
   - action: actuator_position
     params:
       target: drive
@@ -23,7 +31,7 @@ mission:
   # Leave the area
   - action: drive_backward
     params:
-      distance_m: 0.5
+      distance_m: 0.7
       use_camera: false
       timeout_s: 15
   # End

@@ -1,40 +1,32 @@
 mission:
-  name: Excavation run DIG
+  name: Construction run DUMP
   steps:
-  - action: actuator_position
+  - action: drive_forward
     params:
-      target: dig2
-      timeout_s: 8
-  - action: drive_backward
-    params:
-      distance_m: 0.25
+      distance_m: 0.7
       use_camera: false
       timeout_s: 15
   - action: actuator_position
     params:
-      target: dig1
-      timeout_s: 8
+      target: dump
+      timeout_s: 20
   - action: drive_backward
     params:
-      distance_m: 1.0
+      distance_m: 0.15
       use_camera: false
-      timeout_s: 15
-  - action: actuator_position
+      timeout_s: 5
+  - action: drive_forward
     params:
-      target: dig2
-      timeout_s: 8
-  - action: drive_backward
-    params:
-      distance_m: 0.5
+      distance_m: 0.15
       use_camera: false
-      timeout_s: 15
+      timeout_s: 5
   - action: actuator_position
     params:
       target: drive
       timeout_s: 8
-  - action: drive_forward
+  - action: drive_backward
     params:
-      distance_m: 1.0
+      distance_m: 0.7
       use_camera: false
       timeout_s: 15
   - action: stop

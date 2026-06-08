@@ -1,153 +1,228 @@
-# lunar_rover_ws
-## Connect to cheese MiniPC
-### MiniPC is named cheese and has a static IP of 192.168.0.102
-### run on laptop
+# Lunar Rover — Lunabotics / NASA Competition Rover
+
+This is the software stack for our autonomous lunar excavation rover. It runs across two machines: a **mini PC** on the rover (hostname `cheese`, IP `192.168.0.102`) and a **laptop** used as mission control. Both must be on the same WiFi network.
+
+---
+
+## Arduino Serial Protocol
+
+All commands follow this 7-byte format:
+
+```
+[0xAA] [Device] [Speed] [Direction] [LoByte] [Checksum] [0x55]
+Checksum = Device XOR Speed XOR Direction XOR LoByte
+```
+
+| Command | Device Byte | Description |
+|---|---|---|
+| Left motors (FL+BL) | `0x05` | Speed 0–255, Direction 0/1 |
+| Right motors (FR+BR) | `0x06` | Speed 0–255, Direction 0/1 |
+| Both actuators | `0x08` | Speed 0–255, Direction 0/1 |
+| Servo | `0x11` | Speed byte = angle. 90=stop, 45=CCW, 135=CW |
+| Actuator → DIG 1 | `0xA7` | Moves to dig position 1 |
+| Actuator → DIG 2 | `0x93` | Moves to dig position 2 |
+| Actuator → DRIVE | `0xA9` | Raises to drive/transport position |
+| Actuator → DUMP | `0xB3` | Moves to dump position |
+| Calibrate actuator | `0xCA` | Drives to hard stop, zeros encoder |
+| Distance drive (dual) | `0xDC` | Encoder-based straight drive |
+| Load left encoder | `0xC8` | Pre-load left wheel target |
+| Load right encoder | `0xC9` | Pre-load right wheel target |
+| Start isolated turn | `0xE8` | Each side stops at its own target |
+| STOP ALL | `0xFF` | Emergency stop everything |
+
+**Telemetry back from Arduino (Serial2, 115200 baud):**
+```
+[0xAA] [ax 4B] [ay 4B] [az 4B] [gx 4B] [gy 4B] [gz 4B] [0xA5] [enc 2B] [checksum] [0x55]
+All IMU values are int32 = physical_value × 1000
+Encoder is uint16, centred at 32000
+```
+
+---
+
+## How to Run
+
+### 1. Connect to miniPC
+
+```bash
 ssh cheese@192.168.0.102
+```
 
-### note all code is on the MiniPC and laptop. Both computers have to be on the same Wifi
+### 2. Build the workspace (first time or after code changes)
 
-## How to run:
+```bash
 cd ~/lunar_rover_ws
-colcon build 
+colcon build
 source install/setup.bash
+```
 
-## Run from mission control (laptop)
-bash full_launch_laptop.sh --start-minipc
+### 3. Flash Arduino
 
-## Run On Mini PC after RViz is launched for stereo camera
-bash ~/lunar_rover_ws/restart_rear_camera.sh
+```bash
+arduino-cli compile --upload -p /dev/ttyACM0 --fqbn arduino:avr:mega .
+```
 
-## On Mini PC for automation
+### 4. Launch everything on miniPC
+
+```bash
+bash ~/lunar_rover_ws/full_launch_minipc.sh
+```
+
+This starts: TF tree, D435 camera, image pipelines, rear stereo camera, joy_node, joy_to_arduino, and the autonomous nav nodes.
+
+To disable the nav nodes (lighter launch):
+```bash
+NAV=0 bash ~/lunar_rover_ws/full_launch_minipc.sh
+```
+
+To add a competition delay buffer (e.g. 5 seconds) to the camera streams:
+```bash
+DELAY_SEC=5.0 bash ~/lunar_rover_ws/full_launch_minipc.sh
+```
+
+### 5. Launch mission control on laptop
+
+```bash
+bash ~/lunar_rover_ws/full_launch_laptop.sh
+```
+
+Or to also SSH-start the miniPC automatically:
+```bash
+bash ~/lunar_rover_ws/full_launch_laptop.sh --start-minipc
+```
+
+### 6. Run a mission
+
+```bash
+# Dry-run to validate YAML first
 bash ~/lunar_rover_ws/run_mission.sh --dry-run mission.yaml
-bash ~/lunar_rover_ws/run_mission.sh
 
-## Speaker
-# Note A4
-speaker-test -t sine -f 440
+# Run it
+bash ~/lunar_rover_ws/run_mission.sh mission.yaml
 
-# Music
-mplayer chiefkeefsosa.mp3
+# Or use the GUI: MISSION tab → Load → START MISSION
+```
 
-## Record Cam
+Pre-built mission files:
+- `mission.yaml` — Full excavation sequence (edit distances before use)
+- `dig.yaml` — Digging run only
+- `dump.yaml` — Dump run only
+
+**⚠️ Always check `distance_m` values in YAML are in metres, not millimetres.**
+
+---
+
+## Teleop (Joystick)
+
+Plug Xbox controller into the **miniPC USB port**, then:
+
+```bash
+# Via GUI: CONTROL tab → START TELEOP
+# Or manually on miniPC:
+ros2 run joy joy_node &
+python3 ~/lunar_rover_ws/joy_to_arduino.py
+```
+
+| Control | Action |
+|---|---|
+| Left stick Y | Left wheels (tank drive) |
+| Right stick Y | Right wheels (tank drive) |
+| LT hold | Actuator extend |
+| RT hold | Actuator retract |
+| LB hold | Servo CCW |
+| RB hold | Servo CW |
+| A | Actuator → DIG 2 |
+| B | Actuator → DIG 1 |
+| Y | Actuator → DRIVE position |
+| X | Actuator calibrate / dump |
+| Start | Emergency stop toggle |
+
+---
+
+## ROS Environment Variables
+
+These must be set on **both machines**. Add to `~/.bashrc` if not already there:
+
+```bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+```
+
+Run once on miniPC to add them automatically:
+```bash
+bash ~/lunar_rover_ws/fix_minipc_env.sh
+```
+
+---
+
+## Key Topics
+
+| Topic | Direction | Description |
+|---|---|---|
+| `/camera/color/stream/compressed` | miniPC → laptop | Front RGB @ 6fps |
+| `/camera/depth/stream/compressed` | miniPC → laptop | Front depth @ 3fps |
+| `/camera_rear/stream/compressed` | miniPC → laptop | Rear stereo @ 10fps |
+| `/imu/gyro_deg_s` | Arduino → miniPC | Gyro [gx, gy, gz] deg/s |
+| `/imu/accel_ms2` | Arduino → miniPC | Accel [ax, ay, az] m/s² |
+| `/nav/encoder_raw` | Arduino → miniPC | Actuator encoder count |
+| `/mission/start` | laptop → miniPC | Bool: start/abort mission |
+| `/mission/status` | miniPC → laptop | JSON step progress |
+| `/nav/arduino_dist_cmd` | miniPC → Arduino | Float32 metres to drive |
+| `/nav/arduino_turn_cmd` | miniPC → Arduino | Float32Array: arc_mm, speed, CW |
+| `/cmd_vel` | any → Arduino bridge | Twist for arc/turn motion |
+
+---
+
+## Cameras
+
+**Front — Intel RealSense D435**
+- USB 3.0 required (blue port)
+- Topics: `/camera/camera/color/image_raw`, `/camera/camera/aligned_depth_to_color/image_raw`
+- If it fails: `bash DiagnosticAndTesting/diagnose_camera.sh`
+- USB stability fix: `sudo bash DiagnosticAndTesting/fix_camera_usb.sh`
+
+**Rear — IFWATER 3D Stereo USB (1600×600 side-by-side)**
+- Appears as a single `/dev/videoX` device
+- Udev symlink for stable device path: `bash ~/lunar_rover_ws/fix_stereo_udev.sh`
+- After running, camera is always at `/dev/video_stereo`
+- To restart just the rear camera: `bash ~/lunar_rover_ws/restart_rear_camera.sh`
+
+---
+
+## Diagnostics
+
+```bash
+# Check ROS network and streaming
+bash ~/lunar_rover_ws/check_streaming.sh
+
+# Check if all SLAM/nav nodes are up
+bash DiagnosticAndTesting/slam_check_nodes.sh
+
+# Check TF tree
+bash DiagnosticAndTesting/check_tf.sh
+
+# View all logs
+bash DiagnosticAndTesting/view_logs.sh
+
+# Find stereo camera device
+bash DiagnosticAndTesting/find_camera_devices.sh
+```
+---
+
+## Other Useful Commands
+
+```bash
+# Record depth camera bag
 rs-record -f depth_only.bag -t 5
 
-rs-convert -i depth_only.bag -p depth_frame
+# Play a sound (competition signal)
+speaker-test -t sine -f 440
 
-
-#### OLD ####
-## On mini pc
-# Terminal 1 - Arduino motor bridge
-  ros2 run lunar_robot_hardware arduino_motor_controller
-
-# Terminal 2 - Nav processor (A* + obstacle avoidance)
-  python3 nav_depth_processor.py
-
-# Terminal 3 - Command mux (joystick vs autonomous)
-    python3 nav_cmd_mux.py
-
-# Terminal 4 - (optional) depth odometry
-python3 nav_depth_odom.py
-
-# Laptop 
-  python3 nav_control_panel.py
-
-
-## SLAM with RTAB-mapping (Not Implemented)
-python3 slam_launch.py  
-bash slam_laptop.sh
-
-## Kill topics
-pkill -f joy_node
+# Kill all nav/camera nodes
+pkill -f joy_to_arduino
 pkill -f arduino_teleop_controller
+pkill -f optimized_image_pipeline
 
-## Commands for Arduino
-All Commands shall be sent in the Following Format 
-N/A values means it doesn’t matter. 
-
-Start | Device | Speed | Direction | END | Description
-0xAA | 0x05 | Int 0-255 | Int 0 or 1 | 0x55 | Controls left motors 
-0xAA | 0x06 | Int 0-255 | Int 0 or 1 | 0x55 | Controls right motors 
-0xAA | 0x08 | Int 0-255 | Int 0 or 1 | 0x55 | Controls Actuators 
-0xAA | 0x11 | Int 0-255 | N/A | 0x55 | Controls Servo, 90 is stop, 45 CC, 135 CW 
-0xAA | 0xA7 | N/A | N/A | 0x55 | Sets Actuator to Dig 
-0xAA | 0xA9 | N/A | N/A | 0x55 | Sets Actuator to Drive  
-0xAA | 0xB3 | N/A | N/A | 0x55 | Sets Actuator to Dump 
-0xAA | 0xCA | N/A | N/A | 0x55 | Set Motor to high level, encoder counts to 0, ( Calibrate Bucket) 
-0xAA | 0xB4 | N/A | N/A | 0x55 | Stops all moving parts 
-0xAA | 0xD1 | N/A | N/A | 0x55 | Request  IMU Data NOW 
-
-
-## Signals back from IMU/encoders
-Telemetry 
-Start: 0xAA 
-ax: 4 byte float 
-ay: 4 byte float 
-az: 4 byte float 
-gx: 4 byte float 
-gy: 4 byte float 
-gz: 4 byte float 
-ENC Start: 0xA5 
-ENC: 2 byte integer 16 bits, min 0 max 65535 
-END: 0x55 
-
-a is axelaration, g is gyro.
-
-Unpack gyro/accelaration data
-imprt struct
-ang_cdeg = struct.unpacj('<h' data)[0]
-angle_deg = ang_cdeg / 1000.0
-
-
-# Important dependencies
-sudo apt install ros-jazzy-nav2-bringup ros-jazzy-navigation2 ros-jazzy-nav2-route
-
-############################ Needed Dependencies for SLAM ############################
-sudo apt update
-sudo apt install -y \
-  ros-jazzy-rtabmap \
-  ros-jazzy-rtabmap-ros \
-  ros-jazzy-rtabmap-slam \
-  ros-jazzy-rtabmap-odom \
-  ros-jazzy-rtabmap-viz \
-  ros-jazzy-rtabmap-msgs \
-  ros-jazzy-rtabmap-examples
-
-######################################### OLD #########################################
-
-## Python script with buttons to all needed ros nodes and rviz need to add RTAB-Map. Tests all on one computer (Not as usefull anymore)
-python3 rover_launcher.py
-
-## Split launch for cameras's
-- MiniPC:
-ssh cheese@IP
-bash mini_pc_launch.sh
-
-- 2nd Terminal MiniPC:
-pyhton3 optimized_image_pipeline.py
-
-- Laptop:
-bash laptop_ros_launch.sh
-
-## Test Camera
-cd DiagnosticAndTesting
-bash test_camera_transforms.sh
-
-## Test arduino teleop code no ROS (WORKING)
-cd /lunar_rover_ws/ArduinoNoROS
-python3 teleop_no_ros.py
-
-## Teleop 
-### Terminal 1 Connect to Arduino
-ros2 run lunar_robot_hardware arduino_motor_controller
-
-### Terminal 2 Keyboard telep
-ros2 run lunar_robot_hardware arduino_teleop
-
-## Terminal 2 Controler Start
-ros2 run joy joy_node
-
-## Terminal 3 Controler Teleop
-ros2 run lunar_robot_hardware controller_teleop
-
-### Terminal 2 for point click navigation
-ros2 launch lunar_robot_hardware arduino_navigation.launch.py
+# Build only a specific package
+colcon build --packages-select lunar_robot_hardware
+```

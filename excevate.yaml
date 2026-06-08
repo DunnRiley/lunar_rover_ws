@@ -1,7 +1,7 @@
 mission:
   name: "Excavation run DIG"
   steps:
-  # Skimming pose
+  # Deeper dig
   - action: actuator_position
     params:
       target: dig2
@@ -9,29 +9,18 @@ mission:
   # Digging
   - action: drive_backward
     params:
-      distance_m: 0.25
+      distance_m: 0.75
       use_camera: false
       timeout_s: 15
-  # Deeper dig
+  # Skimming pose
   - action: actuator_position
     params:
       target: dig1
       timeout_s: 8
-  # Digging
-  - action: drive_backward
-    params:
-      distance_m: 1.0
-      use_camera: false
-      timeout_s: 15
-  # Skimming pose
-  - action: actuator_position
-    params:
-      target: dig2
-      timeout_s: 8
   # Diggging 
   - action: drive_backward
     params:
-      distance_m: 0.5
+      distance_m: 0.75
       use_camera: false
       timeout_s: 15
   # Set pose to drive
@@ -39,11 +28,5 @@ mission:
     params:
       target: drive
       timeout_s: 8
-  # Leave area
-  - action: drive_forward
-    params:
-      distance_m: 1.0
-      use_camera: false
-      timeout_s: 15
   # End
   - action: stop
